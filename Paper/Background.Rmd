@@ -1,0 +1,60 @@
+---
+title: "Background Draft"
+author: "Chentian Jiang"
+output: pdf_document
+
+bibliography: bibliography.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Prediabetes
+
+### Definitions: Type 2 Diabetes and Prediabetes
+**Diabetes mellitus** is a disease where the body has abnormally elevated levels of blood glucose (hyperglycemia). Normally, the blood glucose level is reduced by the hormone insulin, which signals cells to absorb glucose from the blood. In type 1 diabetes, the beta cells that produce insulin are damaged, causing lower levels of insulin and higher levels of glucose. In **type 2 diabetes**, the elevated blood glucose levels are caused by _insulin resistance_: the glucose-absorbing cells are less sensitive to the insulin signal and thus absorb less glucose. [@noauthor_diabetes_nodate; @noauthor_types_nodate; @colberg_physical_2016] This paper will focus on type 2 diabetes and the biological conditions that typically precede type 2 diabetes, which are discussed in the following paragraph.
+
+**Prediabetes** refers to the state of hyperglycemia (high blood glucose levels) that is less severe than diabetes but has the potential to develop into type 2 diabetes. This intermediate state does not have a clear definition in existing literature, as seen in varying diagnosis criteria and biological phenotypes. Although large health organizations, such as American Diabetes Association (ADA), World Health Organization (WHO), and International Expert Committee (ICE), do not agree on the specific criteria for diagnosing prediabetes, they _do_ generally agree that prediabetes can be identified through tests for _impaired fasting glycemia (IFG)_, _impaired glucose tolerance (IGT)_, and _glycated hemoglobin_ ($HbA_{1C}$). IFG, IGT, and $HbA_{1C}$ are also associated with increased risk of cardiovascular diseases. [@echouffo-tcheugui_issues_2018; @kleinherenbrink_prediabetes_2018] The umbrella term for risk of developing diabetes and/or cardiovascular diseases is _cardiometabolic risk_, which is "a consequence of the presence of insulin resistance and atherogenic dyslipidemia." [@ruilope_meaning_2007, p. 60].
+
+
+### Intervention
+Type 2 diabetes interventions include lifestyle changes [@glechner_effects_2018] (dietary modifications [@guess_dietary_2018] and/or physical activity), drug treatments [@moin_review_2018], and bariatric surgery [@ang_reversibility_2018], with "lifestyle modification appearing to be the best therapeutic approach to prediabetes globally" [@echouffo-tcheugui_issues_2018, p.7]. This paper will focus on examining the intervention effects of **physical activity**.
+
+## Physical Activity
+Regular physical activity lowers the risk for many diseases, including cardiometabolic risk [@leavitt_2008_nodate; @world_health_organization_global_2010].
+
+### Guidelines
+The US government has issued "2008 Physical Activity Guidelines for Americans" [@leavitt_2008_nodate], which details the health benefits of physical activity and provides weekly guidelines for the type, duration and intensity of physical activity that different groups of people (children/adolescents, adults, older adults, pregnant women, adults with disabilities, people with chronic medical conditions) should engage in. For example, adults should focus on performing moderate to vigorous intensity aerobic activity (75min-300min per week, depending on intensity) and add muscle-strengthening activities on 2 or more days of the week for further health benefits. On an international scale, The World Health Organization's (WHO) "global recommendations on physical activity for health" [@world_health_organization_global_2010] provides very similar guidelines.
+
+The American Diabetes Association (ADA) agree with the above guidelines but focuses more on physical activity recommendations for the specific case of _diabetes_. For example, individuals with type 2 diabetes benefit from _regular_ (daily) activity that maintains the _transient_ effect of exercise on insulin action. Furthermore, for managing blood glucose levels, "engaging in combined aerobic and resistance training appears to be superior to undertaking either type of training on its own" [@colberg_key_2017, p. 3]. While the US government and WHO mainly focus on aerobic and resistance/muscle-strengthening activities, the ADA also suggests that flexibility and balance exercises, such as yoga, can benefit blood glucose level management as well as general joint mobility, which is restricted as a result of hyperglycemia and aging. The ADA supplements these recommendations with associated diabetic health concerns. For example, very intense exercise can boost blood glucose levels, and individuals with diabetes-related vascular health complications should take precautions before engaging in physical activity. However, while acknowledging these health concerns, ADA's overall stance is that "pre-exercise medical clearance is not necessary for asymptomatic, sedentary individuals who wish to begin low- or moderate-intensity physical activity not exceeding the demands of brisk walking or everyday living" (unlike American College of Sports Medicine (ACSM), which recommends medical clearance) [@colberg_key_2017; @colberg_physical_2016]. 
+
+### Physical Activity as an Intervention for Type 2 Diabetes
+Overall, lifestyle changes are an effective intervention for type 2 diabetes, as shown in 16 randomized controlled trials with intervention follow-ups ranging from one to six years [@glechner_effects_2018]. The effectiveness is determined by a low ($<1$) _relative risk_ for type 2 diabetes, which is calculated by $$\frac{\text{percentage of participants with diabetes in intervention group}}{\text{percentage of participants with diabetes in control group}}$$
+
+Among these studies, [@pan_effects_1997] (6 year follow-up) is an example that physical activity, standalone or combined with dieting, significantly decreases risk for type 2 diabetes, as measured mainly by incidence of diabetes per 100 person-years. This study also reports changes in measures of blood glucose levels and weight.
+
+## Strong-D Study
+Stanford's Strong-D study aims to evaluate different types of exercise regimens (strength, aerobic and a combination of both) as an intervention for normal weight type 2 diabetes [@noauthor_strong-d_nodate]. This study has two interesting aspects:
+
+1. Comparison of strength versus aerobic exercise regimens
+2. Use of smartwatch/biosensor technology
+
+### TODO: Strength/Resistance exercise
+Possible advantages:
+
+* Distinction between different types of exercises, rather than generalizing that exercise is an effective intervention
+* Depending on the participants' profiles and the results of each type of exercise regimen, can personalize exercise regimen recommendation based on the participant's profile
+  * vs recommending the exercise regimen that is _overall_ most effective for reducing risk of diabetes
+
+TODO: [@ashton_effects_2018]
+
+### TODO: Use of technology in exercise interventions for type 2 diabetes
+Possible advantages:
+
+* detailed biosensor data
+* personalization
+* other advantages, e.g.:
+  * Yates et al. investigated the effectiveness of educating IGT (impaired fasting glycemia) individuals about implementing walking as an IGT intervention. One group received an education program that focused on strategies that incorporated pedometers, while another group received a standard education program that focused on time-based strategies. Compared to a control group, the pedometer group showed significant decrease in blood glucose levels, while the standard education group did not show any significant improvements. [@yates_effectiveness_2009; @glechner_effects_2018]
+
+# References
