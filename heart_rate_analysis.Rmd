@@ -1,0 +1,127 @@
+---
+title: "Heart Rate Analysis"
+output: html_notebook
+---
+
+## Per Second Heart Rate Data Sampling+Merging
+Created a 20% sample of each heart rate csv file via: 
+
+`Rscript save_sample_csv.R 0.2 20170801_20180315_heartrate_seconds_merged.csv 20180316_20180701_heartrate_seconds_merged.csv 20180702_20180927_heartrate_seconds_merged.csv`
+
+(`save_sample_csv.R` is included in this directory)
+
+Merged all sample heart rate files via the command line:
+
+`cat 20170801_20180315_heartrate_seconds_merged_sample.csv 20180316_20180701_heartrate_seconds_merged_sample.csv 20180702_20180927_heartrate_seconds_merged_sample.csv > 20170801_20180927_heartrate_seconds_merged_sample_mergedAll.csv`
+
+```{r}
+library(data.table)
+library(magrittr)
+library(ggplot2)
+```
+
+## Per Second Heart Rate Data Overview
+
+```{r}
+dt_hr <- fread("20170801_20180927_heartrate_seconds_merged_sample_mergedAll.csv")
+```
+
+```{r}
+dt_hr %>% head()
+```
+
+Number of participants (number of unique Ids):
+```{r}
+dt_hr$Id %>% unique() %>% length()
+```
+
+There are no missing heart rate values:
+
+```{r}
+dt_hr$Value %>% is.na() %>% sum() %>% divide_by(nrow(dt_hr))
+```
+
+## Hypothesis 1
+Resting HR (RHR) changes over time during course of study
+
+1. (Define RHR)
+2. As participants’ fitness level increases, their RHR decreases
+3. Participants in the aerobic activity study arm see a larger drop in RHR than those in the strength-training study arm.
+
+### Input Variable: "Fitness Level"
+TODO: definition via literature
+
+Fitbit features that could indicate fitness level:
+
+* BMI
+* weight
+
+TODO: Strong-D's fitbit weight log dataset is empty, so what can we use to indicate fitness level?
+
+### Response Variable: "Resting Heart Rate" (RHR)
+TODO: definition via literature
+
+Fitbit features that could indicate RHR:
+
+* **fitbit's calculation of daily resting heart rate**
+  * https://help.fitbit.com/articles/en_US/Help_article/1565#resting
+* heart rate during lowest intensity category
+  * fitbit's intensity value is based on MET?
+* MET (https://en.wikipedia.org/wiki/Metabolic_equivalent)
+
+This is a **continuous** response variable --> can compare different study arms using ANOVA tests.
+
+* TODO: other analysis methods?
+* TODO: look at distribution of response variable
+
+### "As participants’ fitness level (input var.) increases, their RHR (response var.) decreases."
+Note: the bolded features from above will be used as the input/output variables in the following analysis.
+
+```{r}
+# TODO: data.table rolling join where we find the closest fitness level to each resting heart rate measurement
+```
+
+```{r}
+dt_dailyActivity <- fread("dailyActivity_merged.csv")
+```
+
+```{r}
+# extract daily RHR measurements
+dt_rhr <- dt_dailyActivity[, .(Id, RestingHeartRate, ActivityDate)]
+dt_rhr %>% head()
+```
+
+We have a few missing resting heart rate values, specifically:
+
+```{r}
+dt_rhr$RestingHeartRate %>% is.na() %>% sum() %>% divide_by(nrow(dt_rhr))
+```
+
+Around 26% of the daily resting heart rate measurements are missing.
+
+* How can we impute these missing values?
+* Or would it be better to use the per second heart rate measurements and use the measurements for low intensity activity as resting heart rate measurements?
+  * This dataset has no missing values and the measurements are more precise.
+
+```{r}
+# convert to Date class
+dt_rhr$ActivityDate <- as.Date(dt_rhr$ActivityDate, format = "%m/%d/%Y")
+dt_rhr$ActivityDate %>% class()
+```
+
+```{r}
+id_list <- dt_rhr$Id %>% unique()
+```
+
+```{r}
+# visualize resting heart rate over time for a few people at a time
+ggplot(data = dt_rhr[Id %in% id_list[1:5]]) + 
+  geom_line(mapping = aes(x = ActivityDate, y = RestingHeartRate, group = Id, color = Id)) +
+  theme(legend.position = "none")
+```
+
+It seems like the missing data in fitbit's daily RHR measurements is posing a problem for visualize the RHR trends over time for each person!
+* TODO: instead, look at trends for per second HR (no missing data) during low intensity activity
+
+
+
