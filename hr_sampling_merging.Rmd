@@ -1,0 +1,43 @@
+---
+title: "Per Second Heart Rate Data Sampling and Merging"
+output: html_notebook
+---
+
+Created a 20% sample of each heart rate csv file via: 
+
+`Rscript save_sample_csv.R 0.2 20170801_20180315_heartrate_seconds_merged.csv 20180316_20180701_heartrate_seconds_merged.csv 20180702_20180927_heartrate_seconds_merged.csv`
+
+(`save_sample_csv.R` is included in this directory)
+
+Merged all sample heart rate files via the command line:
+
+`cat 20170801_20180315_heartrate_seconds_merged_sample.csv 20180316_20180701_heartrate_seconds_merged_sample.csv 20180702_20180927_heartrate_seconds_merged_sample.csv > 20170801_20180927_heartrate_seconds_merged_sample_mergedAll.csv`
+
+```{r}
+library(data.table)
+library(magrittr)
+```
+
+## Per Second Heart Rate Data Overview
+
+```{r}
+dt_hr <- fread("data/20170801_20180927_heartrate_seconds_merged_sample_mergedAll.csv")
+```
+
+```{r}
+dt_hr %>% head()
+```
+
+Number of participants (number of unique Ids):
+```{r}
+dt_hr$Id %>% unique() %>% length()
+```
+
+There are no missing heart rate values:
+```{r}
+dt_hr$Value %>% is.na() %>% sum() %>% divide_by(nrow(dt_hr))
+```
+
+
+
+

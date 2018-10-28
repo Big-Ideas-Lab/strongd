@@ -1,0 +1,238 @@
+---
+title: "Hypothesis 1: Resting Heart Rate"
+output: html_notebook
+---
+
+## Overview of Hypothesis 1
+Resting HR (RHR) changes over time during course of study
+
+1. (Define RHR)
+2. As participants’ fitness level increases, their RHR decreases
+3. Participants in the aerobic activity study arm see a larger drop in RHR than those in the strength-training study arm.
+
+### Input Variable: "Fitness Level"
+TODO: definition via literature
+
+Fitbit features that could indicate fitness level:
+
+* BMI
+* weight
+
+TODO: Strong-D's fitbit weight log dataset is empty, so what can we use to indicate fitness level?
+
+### Response Variable: "Resting Heart Rate" (RHR)
+TODO: definition via literature
+
+Fitbit features that could indicate RHR:
+
+* **fitbit's calculation of daily resting heart rate**
+  * https://help.fitbit.com/articles/en_US/Help_article/1565#resting
+* heart rate during lowest intensity category
+  * fitbit's intensity value is based on MET?
+* MET (https://en.wikipedia.org/wiki/Metabolic_equivalent)
+
+This is a **continuous** response variable --> can compare different study arms using ANOVA tests.
+
+* TODO: other analysis methods?
+* TODO: look at distribution of response variable
+
+## Import
+```{r}
+library(data.table)
+library(magrittr)
+library(ggplot2)
+
+# contains commonly used functions
+source("utils_custom.R")
+```
+
+## Relevant Fitbit Data
+If there is previously saved data, load this data and start running chunks from the checkpoint below. (TODO: link)
+
+```{r}
+# per second heart rate data
+# note that this is only a sample of the data since the whole dataset is too much to play around with; once I've finalized the analysis code and decided on the outputs/graphs I want, I will run the final code on the full dataset
+dt_hr <- fread("data/20170801_20180927_heartrate_seconds_merged_sample_mergedAll.csv")
+
+# daily activity data
+dt_dailyActivity <- fread("data/dailyActivity_merged.csv")
+
+# per minute intensity data
+dt_intensity <- fread("data/minuteIntensitiesNarrow_merged.csv")
+```
+
+## Exploratory Data Analysis
+
+### RHR Over Time using Fitbit's Calculated Daily RHR
+
+```{r}
+# extract daily RHR measurements
+dt_rhr <- dt_dailyActivity[, .(Id, RestingHeartRate, ActivityDate)]
+dt_rhr %>% head()
+```
+
+We have a few missing resting heart rate values, specifically:
+
+```{r}
+dt_rhr$RestingHeartRate %>% is.na() %>% sum() %>% divide_by(nrow(dt_rhr))
+```
+
+Around 26% of the daily resting heart rate measurements are missing.
+
+* How can we impute these missing values?
+* Or would it be better to use the per second heart rate measurements and use the measurements for low intensity activity as resting heart rate measurements?
+  * The latter dataset has no missing values and the measurements are more precise.
+
+```{r}
+# convert to Date class
+dt_rhr$ActivityDate <- as.Date(dt_rhr$ActivityDate, format = "%m/%d/%Y")
+dt_rhr$ActivityDate %>% class()
+```
+
+```{r}
+# list of all unique participant ids
+id_list <- dt_rhr$Id %>% unique()
+
+id_list
+```
+
+*From here on, the visualizations will only use the first 5 people from `id_list` so that we don't get too many overlapping lines (one line per person) on the plots.*
+
+```{r}
+# visualize resting heart rate over time for a few people
+show_linePerGroup(dt_rhr[Id %in% id_list[1:5]], "ActivityDate", "RestingHeartRate", "Id")
+# (see utils_custom.R for function definition)
+```
+
+It seems like the missing data in fitbit's daily RHR measurements is posing a problem for visualizing the RHR trends over time for each person!
+* TODO: instead, look at trends for per second HR (no missing data) during low intensity activity
+
+### RHR Over Time using Raw Per Second HR and Per Minute Intensity Levels
+Available data: One dataset for per minute intensity values and another dataset for per second heart rate measurements. 
+
+Goal: Interpolate per minute intensity values for each per second heart rate measurement. Then use the heart rate values corresponding to lowest intensity (intensity value 0) as RHR; plot this against time.
+
+Intensity values have no missing values and have 4 categories (according to fitabase):
+* 0: Sedentary
+* 1: Light
+* 2: Moderate
+* 3: Very Active
+```{r}
+head(dt_intensity)
+
+dt_intensity$Intensity %>% unique()
+```
+
+```{r}
+# TODO: fix data merging (don't merge the first line of csv files with the column names), the following is an inelegant quick fix...
+dt_hr <- dt_hr[Value != "Value"]
+```
+
+We want to **interpolate the intensity category for each heart rate measurement**: join per second heart rate data with per minute intensity data by finding the temporally closest intensity category for each heart rate measurement.
+```{r}
+# convert time to POSIXct class (this can take some time...)
+dt_hr$Time <- as.POSIXct(dt_hr$Time, format = "%m/%d/%Y %I:%M:%S %p")
+dt_intensity$ActivityMinute <- as.POSIXct(dt_intensity$ActivityMinute, format = "%m/%d/%Y %I:%M:%S %p")
+
+# convert heart rate values (originally character class) to numerical class
+dt_hr$Value <- as.numeric(dt_hr$Value)
+```
+
+```{r}
+# setup for join
+dt_hr[, join_time := Time]
+dt_intensity[, join_time := ActivityMinute]
+
+setkey(dt_hr, Id, join_time)
+setkey(dt_intensity, Id, join_time)
+```
+
+```{r}
+# right outer join (include all measurements from dt_hr), interpolating the temporally closest intensity value/category for each HR measurement
+join <- dt_intensity[dt_hr, roll = "nearest"]
+
+# save this joined structure for quick future use
+save(join, file="hr_intensity_join.RData")
+```
+
+**TODO: Saved Data Checkpoint**
+
+**Median heart rate per intensity category:**
+TODO: calculate quartiles to make box plots
+```{r}
+dt_hr_allIntensity <- join[, .(Id, Time, Value, Intensity)]
+dt_hr_allIntensity %>% head()
+```
+
+```{r}
+medianHR_perIntensity <- dt_hr_allIntensity[, .(medianHR = median(Value)), by=Intensity]
+
+medianHR_perIntensity
+```
+
+```{r}
+ggplot(data = medianHR_perIntensity) +
+  geom_bar(stat = "identity", mapping = aes(x = Intensity, y = medianHR))
+```
+
+**Delta median heart rate between highest and lowest intensity category per participant:**
+TODO: calculate quartiles to make box plots
+```{r}
+# it is possible that some participants never have an intensity value in the highest/lowest intensity category and therefore are not included in the following tables
+
+medianHR_highIntensity_perId <- dt_hr_allIntensity[Intensity == "3", .(medianHR_high = median(Value)), by = Id]
+
+medianHR_lowIntensity_perId <- dt_hr_allIntensity[Intensity == "0", .(medianHR_low = median(Value)), by = Id]
+
+# inner join
+setkey(medianHR_highIntensity_perId, Id)
+setkey(medianHR_lowIntensity_perId, Id)
+deltaHR_perId <- medianHR_highIntensity_perId[medianHR_lowIntensity_perId, nomatch = 0]
+deltaHR_perId[, deltaHR := (medianHR_high - medianHR_low)]
+deltaHR_perId %>% head()
+```
+
+```{r}
+ggplot(data = deltaHR_perId) +
+  geom_bar(stat = "identity", mapping = aes(x = Id, y = deltaHR, fill = deltaHR)) +
+  theme(axis.text.x = element_text(angle = 90, size=5))
+```
+
+**RHR (heart rate values during lowest intensity category) over time:**
+```{r}
+# focus on (resting) HR during lowest intensity category (0: sedentary)
+dt_hr_lowIntensity <- join[Intensity == 0][, .(Id, Time, Value)]
+```
+
+```{r}
+# visualize resting resting heart rate over time for a few people
+show_linePerGroup(dt_hr_lowIntensity[Id %in% id_list[1:5]], "Time", "Value", "Id")
+```
+
+There's too much noise/variance when we look at the just the per second raw HR values. Let's instead use aggregate values, such as minimum (since we're interested in resting/low heart rate values) or median (resistant to noise), over a some time window size, such as one day.
+
+```{r}
+# create a column that indicates the day of each measurement
+dt_hr_lowIntensity[, day := as.Date(Time)]
+
+# aggregation, e.g. daily minimum RHR per person
+dt_hr_lowIntensity[, .(minHR_day = min(Value)), by = .(Id, day)]
+```
+
+```{r}
+# daily minimum low intensity HR over time for a few people
+show_linePerGroup(dt_hr_lowIntensity[Id %in% id_list[1:5], .(minHR_day = min(Value)), by = .(Id, day)], "day", "minHR_day", "Id")
+```
+
+
+```{r}
+# daily median low intensity HR over time for a few people
+show_linePerGroup(dt_hr_lowIntensity[Id %in% id_list[1:5], .(medianHR_day = median(Value)), by = .(Id, day)], "day", "medianHR_day", "Id")
+```
+
+
+## "As participants’ fitness level (input var.) increases, their RHR (response var.) decreases."
+
+```{r}
+# TODO: data.table rolling join where we find the closest fitness level to each resting heart rate measurement
+```
