@@ -17,7 +17,8 @@ dt_intensity$Id <- dt_intensity$Id %>% substring(7, 10)
 
 "Cleaning ActivityMinute column..."
 # convert time to POSIXct class (this can take some time...)
-dt_intensity$ActivityMinute <- as.POSIXct(dt_intensity$ActivityMinute, format = "%m/%d/%Y %I:%M:%S %p")
+dt_intensity$ActivityMinute <- as.POSIXct(dt_intensity$ActivityMinute, format = "%m/%d/%Y %I:%M:%S %p", tz = "GMT")
+# note: GMT does not have daylight saving time (DST) and therefore will not omit invalid DST times as NA
 
 "Saving..."
 save(dt_intensity, file = FILE_PATH)

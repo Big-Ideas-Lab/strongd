@@ -25,7 +25,8 @@ dt_hr$Id <- dt_hr$Id %>% substring(7, 10)
 
 "Cleaning Time column..."
 # convert time to POSIXct class (this can take some time...)
-dt_hr$Time <- as.POSIXct(dt_hr$Time, format = "%m/%d/%Y %I:%M:%S %p")
+dt_hr$Time <- as.POSIXct(dt_hr$Time, format = "%m/%d/%Y %I:%M:%S %p", tz = "GMT")
+# note: GMT does not have daylight saving time (DST) and therefore will not omit invalid DST times as NA
 
 "Cleaning Value column..."
 # convert heart rate values (originally character class) to numerical class
