@@ -13,6 +13,7 @@ dt_clinical <- fread("Sensitive_StrongD/Sensitive_20181031_StrongD_clinic_demog_
 dt_fitness <- dt_clinical[, .(Id = `Participant ID`, 
                               Date = `Date of Study Visit`, 
                               Weight_lbs = `Weight (lbs)`, 
+                              Height_inches = `Height (inches)`,
                               Waist_inches = `Waist Circumference (inches)`)]
 
 # extract relevant HR measurements
