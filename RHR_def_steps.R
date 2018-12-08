@@ -1,13 +1,7 @@
 # Tip: use RStudio's document outline for navigating this file
 
 # Import ----
-library(data.table)
-library(magrittr)
-library(ggplot2)
-library(RColorBrewer)
-library(RcppRoll)
-
-# contains commonly used functions
+# contains commonly used functions and libraries
 source("utils_custom.R")
 
 # Load Cleaned Data ----
@@ -15,6 +9,7 @@ source("utils_custom.R")
 
 load("cleaning/RData_clean/dt_steps.RData")
 load("cleaning/RData_clean/dt_hr.RData")
+load("cleaning/RData_clean/dt_arm_simple.RData")
 
 # Interpolate per second HR measurement for each per minute step measurement ----
 
@@ -42,6 +37,28 @@ id_list <- dt_steps_hr$Id %>% unique()  # 78 participants
 setkey(dt_steps_hr, Id, ActivityMin)
 dt_steps_hr <- unique(dt_steps_hr)
 
+# Outlier Removal ----
+# construct a HR boxplot for each participant
+# boxplot <- boxplot(Value ~ Id, dt_steps_hr)
+# 
+# # progress bar
+# pb <- txtProgressBar(min = 0, max = length(boxplot$names), style = 3)
+# i = 1
+# for (group_num in 1:length(boxplot$names)) {
+#   id <- boxplot$names[group_num]
+#   out <- boxplot$out[boxplot$group == group_num]
+#   
+#   # want to remove outliers for this participant, i.e. rows where Id == id and Value %in% out
+#   # thus, we will keep the complement:
+#   dt_steps_hr <- dt_steps_hr[!((Id == id) & (Value %in% out))]
+#   
+#   setTxtProgressBar(pb, i)
+#   i = i + 1
+# }
+# close(pb)
+# 
+# save(dt_steps_hr, file = "dt_steps_hr_noBoxplotOutliers.RData")
+
 # Define RHR in terms of num. steps taken within some time window ----
 
 # I will attempt to define RHR in terms of **total number of steps** taken within a **time window** of some length.
@@ -68,7 +85,7 @@ dt_steps_hr <- unique(dt_steps_hr)
 # I will define RHR as HR values that occur when the total number of steps <= m*
 # within a time window of size n*.
 
-gridSearch_window_steps <- function(dt_steps_hr, summary_func, window_size_list, steps_threshold_list) {
+gridSearch_diff_window_steps <- function(dt_steps_hr, window_size_list, steps_threshold_list) {
   # this function searches for the largest sensitivity value produced from all combinations of parameters
   # specified by window_size_list and steps_threshold_list.
   
@@ -82,8 +99,7 @@ gridSearch_window_steps <- function(dt_steps_hr, summary_func, window_size_list,
                                  .(rangeHR = range(Value, na.rm = TRUE)[2] - range(Value, na.rm = TRUE)[1]), 
                                  by = Id]
   
-  id_list <- dt_rangeHR_byId$Id  # unique ids
-  dt_id <- data.table(Id = id_list)
+  num_participants <- length(dt_rangeHR_byId$Id)
   
   # progress bar
   pb <- txtProgressBar(min = 0, max = nrow(dt_results), style = 3)
@@ -99,39 +115,49 @@ gridSearch_window_steps <- function(dt_steps_hr, summary_func, window_size_list,
     for (m in steps_threshold_list) {
       # summary HR where rolling_sum_steps <= steps_threshold for each participant
       dt_low_summaryHR_byId <- dt_steps_hr[rolling_sum_steps <= m,
-                                           .(low_summaryHR = summary_func(Value, na.rm = TRUE)),
+                                           .(low_summaryHR = median(Value, na.rm = TRUE)),
                                            by = Id]
       
       # summary HR where rolling_sum_steps > steps_threshold for each participant
       dt_high_summaryHR_byId <- dt_steps_hr[rolling_sum_steps > m,
-                                            .(high_summaryHR = summary_func(Value, na.rm = TRUE)),
+                                            .(high_summaryHR = median(Value, na.rm = TRUE)),
                                             by = Id]
       
-      # right outer join to make sure all unique ids are included 
-      # (ids without a summary value will just be padded with NAs in the summary column)
-      dt_low_summaryHR_byId <- dt_low_summaryHR_byId[dt_id, on = "Id"]
-      dt_high_summaryHR_byId <- dt_high_summaryHR_byId[dt_id, on = "Id"]
+      # only consider participants with who have associated values in BOTH the "low" and "high" tables above
+      id_list <- intersect(dt_low_summaryHR_byId$Id, dt_high_summaryHR_byId$Id)
+      dt_id <- data.table(Id = id_list)
       
-      stopifnot(dt_low_summaryHR_byId$Id == dt_high_summaryHR_byId$Id & dt_low_summaryHR_byId$Id == dt_rangeHR_byId$Id)
-      
-      dt_combined <- copy(dt_rangeHR_byId)
-      dt_combined[, low_summaryHR := dt_low_summaryHR_byId$low_summaryHR]
-      dt_combined[, high_summaryHR := dt_high_summaryHR_byId$high_summaryHR]
-      
-      # absolute difference between high_summaryHR (above threshold) and low_summaryHR (below threshold) for each participant
-      dt_combined[, diff_summaryHR := abs(high_summaryHR - low_summaryHR)]
-      
-      # how significant is this difference compared to the range of HR values for each participant?
-      # --> find ratio of diff_summaryHR/rangeHR for each participant
-      dt_combined[, ratio_diff_range := diff_summaryHR/rangeHR]
-      
-      # average over this ratio to find an overall measure for how much this window-threshold combination
-      # causes change in HR values between HR values for steps below the threshold and HR values for steps above the threshold
-      # let's call this measure "sensitivity"
-      sensitivity <- dt_combined[, mean(ratio_diff_range, na.rm = TRUE)]
-      
-      # append to results table
-      dt_results[window_size == n & steps_threshold == m]$sensitivity <- sensitivity
+      if (nrow(dt_id) >= ceiling(num_participants/2)) {
+        # continue only if we can calculate sensitivity for at least half of the participants
+        
+        dt_low_summaryHR_byId <- dt_low_summaryHR_byId[dt_id, on = "Id"]
+        dt_high_summaryHR_byId <- dt_high_summaryHR_byId[dt_id, on = "Id"]
+        
+        dt_combined <- copy(dt_rangeHR_byId)
+        dt_combined <- dt_combined[dt_id, on = "Id"]
+
+        stopifnot(all(dt_low_summaryHR_byId$Id == dt_high_summaryHR_byId$Id) && all(dt_low_summaryHR_byId$Id == dt_combined$Id))
+
+        dt_combined[, low_summaryHR := dt_low_summaryHR_byId$low_summaryHR]
+        dt_combined[, high_summaryHR := dt_high_summaryHR_byId$high_summaryHR]
+
+        # absolute difference between high_summaryHR (above threshold) and low_summaryHR (below threshold) for each participant
+        dt_combined[, diff_summaryHR := abs(high_summaryHR - low_summaryHR)]
+
+        # how significant is this difference compared to the range of HR values for each participant?
+        # --> find ratio of diff_summaryHR/rangeHR for each participant
+        dt_combined[, ratio_diff_range := diff_summaryHR/rangeHR]
+
+        # average over this ratio to find an overall measure for how much this window-threshold combination
+        # causes change in HR values between HR values for steps below the threshold and HR values for steps above the threshold
+        # let's call this measure "sensitivity"
+        sensitivity <- dt_combined[, mean(ratio_diff_range)]
+        
+        # append to results table
+        dt_results[window_size == n & steps_threshold == m]$sensitivity <- sensitivity
+      } else {
+        dt_results[window_size == n & steps_threshold == m]$sensitivity <- NA
+      }
       
       setTxtProgressBar(pb, i)
       i = i + 1
@@ -146,10 +172,64 @@ gridSearch_window_steps <- function(dt_steps_hr, summary_func, window_size_list,
   print("Window size and num. steps combination that produces the highest sensitivity:")
   print(dt_results[which.max(dt_results$sensitivity)])
   
-  return(dt_results)
+  return(dt_results[which.max(dt_results$sensitivity)])
 }
 
-# Search 1: All HR Values ----
+gridSearch_deviation_window_steps <- function(dt_steps_hr, window_size_list, steps_threshold_list) {
+  # initialize table with all possible combinations of the step thresholds and window sizes specified above
+  dt_results <- data.table(steps_threshold = rep(steps_threshold_list, each = length(window_size_list)),
+                           window_size = window_size_list,  # will be recycled
+                           deviation = as.numeric(rep(NA, length(steps_threshold_list)*length(window_size_list))))
+  
+  num_participants <- dt_steps_hr$Id %>% unique() %>% length()
+  
+  # progress bar
+  pb <- txtProgressBar(min = 0, max = nrow(dt_results), style = 3)
+  i = 1
+  for (n in window_size_list) {
+    dt_steps_hr[, 
+                rolling_sum_steps := roll_sum(Steps, n, align = "right", fill = NA),
+                by = Id]
+    
+    for (m in steps_threshold_list) {
+      # summary HR where rolling_sum_steps <= steps_threshold for each participant
+      dt_low_deviationHR_byId <- dt_steps_hr[rolling_sum_steps <= m,
+                                           .(low_deviationHR = sd(Value, na.rm = TRUE)),
+                                           by = Id]
+      
+      # summary HR where rolling_sum_steps > steps_threshold for each participant
+      dt_high_deviationHR_byId <- dt_steps_hr[rolling_sum_steps > m,
+                                            .(high_deviationHR = sd(Value, na.rm = TRUE)),
+                                            by = Id]
+      
+      # only consider participants with who have associated values in BOTH the "low" and "high" tables above
+      id_list <- intersect(dt_low_deviationHR_byId$Id, dt_high_deviationHR_byId$Id)
+      dt_id <- data.table(Id = id_list)
+      
+      if (nrow(dt_id) >= ceiling(num_participants/2)) {
+        dt_low_deviationHR_byId <- dt_low_deviationHR_byId[dt_id, on = "Id"]
+        dt_high_deviationHR_byId <- dt_high_deviationHR_byId[dt_id, on = "Id"]
+        
+        dt_results[window_size == n & steps_threshold == m]$deviation <- mean(dt_low_deviationHR_byId$low_deviationHR)
+      } else {
+        dt_results[window_size == n & steps_threshold == m]$deviation <- NA
+      }
+      
+      setTxtProgressBar(pb, i)
+      i = i + 1
+    }
+    
+    # cleanup
+    dt_steps_hr[, rolling_sum_steps := NULL]
+  }
+  
+  close(pb)
+  print(dt_results[which.min(dt_results$deviation)])
+  return(dt_results[which.min(dt_results$deviation)])
+}
+
+
+# Search 1: All participants ----
 
 # step threshold search over different orders of magnitude
 window_size_list <- c(1, 5, 10, 30, 60)  # minutes
@@ -159,97 +239,75 @@ dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, 
 # here, I use median as the summary function, but other summary functions (with the na.rm option) can be used as well
 # see dt_results for the sensitive value corresponding to each possible combination
 
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:            5000          30    0.496732
-
-# the NaNs in dt_results indicate that steps_threshold and window_size combination has probably exceeded the max possible steps in a time window
-
 # step threshold search over thousands
 window_size_list <- c(1, 5, 10, 30, 60)  # minutes
 steps_threshold_list <- c(2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000)  # num. steps
 dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, window_size_list, steps_threshold_list)
 
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:            5000          30    0.496732
-
 # step threshold search over hundreds
 window_size_list <- c(1, 5, 10, 30, 60)  # minutes
 steps_threshold_list <- c(200, 300, 400, 500, 600, 700, 800, 900)  # num. steps
 dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:             900           5   0.6291139
-
-# step threshold search over tens
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(20, 30, 40, 50, 60, 70, 80, 90)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:              90           1   0.2305746
-
-# step threshold search over ones
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(1, 2, 3, 4, 5, 6, 7, 8, 9)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:               9           1   0.1335809
-
-# Search 2: Below median HR Values ----
 
 # since we're interested in **resting** heart rate, let's try this same search over HR values below some threshold
-# e.g. the median: we want to observe a large sensitivity within the lower HR values rather than all HR values
-medianHR <- median(dt_steps_hr$Value, na.rm = TRUE)
-
-# step threshold search over different orders of magnitude
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(10, 50, 100, 500, 1000, 5000, 10000)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr[Value < medianHR], function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:            1000          10   0.2105664
-
-# step threshold search over thousands
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr[Value < medianHR], function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:            2000          30   0.2126597
+# e.g. the mean: we want to observe a large sensitivity within the lower HR values rather than all HR values
+meanHR <- mean(dt_steps_hr$Value, na.rm = TRUE)
 
 # step threshold search over hundreds
 window_size_list <- c(1, 5, 10, 30, 60)  # minutes
 steps_threshold_list <- c(200, 300, 400, 500, 600, 700, 800, 900)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr[Value < medianHR], function(...) {median(...)}, window_size_list, steps_threshold_list)
+dt_results <- gridSearch_window_steps(dt_steps_hr[Value < meanHR], function(...) {median(...)}, window_size_list, steps_threshold_list)
 
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:             800          10   0.2454909
+# TODO: Best window + step threshold combination for each participant ----
+# TODO: comparison across arms
 
-# step threshold search over tens
+gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list, steps_threshold_list, soft = FALSE) {
+  gridSearch_func_name <- substitute(gridSearch_func) %>% as.character()
+  colors <- colorRampPalette(brewer.pal(8, "Dark2"))(length(id_list))
+  
+  for(i in 1:length(id_list)) {
+    id <- id_list[i]
+    print(sprintf("Searching for participant with id %s", id))
+    
+    if (soft == TRUE) {
+      softmin <- dt_steps_hr[Id == id]$Value %>% quantile(0.05, na.rm = TRUE)
+      softmax <- dt_steps_hr[Id == id]$Value %>% quantile(0.95, na.rm = TRUE)
+      
+      dt_best <- gridSearch_func(dt_steps_hr[Id == id & Value < softmax & Value > softmin], window_size_list, steps_threshold_list)  
+    } else {
+      dt_best <- gridSearch_func(dt_steps_hr[Id == id], window_size_list, steps_threshold_list)  
+    }
+   
+    
+    window_size <- dt_best$window_size
+    steps_threshold <- dt_best$steps_threshold
+    
+    dt_steps_hr[, rolling_sum_steps := NULL]
+    dt_steps_hr[Id == id, rolling_sum_steps := roll_sum(Steps, window_size, align = "right", fill = NA)]
+    
+    dt_steps_hr[, isRHR := FALSE]
+    dt_steps_hr[(Id == id) & (rolling_sum_steps <= steps_threshold),
+                isRHR := TRUE]
+    
+    show_linePerGroup(dt_steps_hr[isRHR == TRUE & Id == id], "ActivityMin", "Value", "Id") +
+      scale_color_manual(values = colors[i])
+    print(sprintf("%s_window=%d_steps=%d_isRHR=TRUE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)))
+    sprintf("%s_window=%d_steps=%d_isRHR=TRUE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
+      save_plot_temp()
+    
+    show_linePerGroup(dt_steps_hr[isRHR == FALSE & Id == id], "ActivityMin", "Value", "Id") +
+      scale_color_manual(values = colors[i])
+    sprintf("%s_window=%d_steps=%d_isRHR=FALSE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
+      save_plot_temp()
+  }
+}
+
+# sample 3 participants
+set.seed(0)
+id_sample <- sample(id_list, 3)
+
+# step threshold search over hundreds
 window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(20, 30, 40, 50, 60, 70, 80, 90)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr[Value < medianHR], function(...) {median(...)}, window_size_list, steps_threshold_list)
+steps_threshold_list <- c(0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)  # num. steps
 
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:              90           1   0.1762583
-
-# step threshold search over ones
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(1, 2, 3, 4, 5, 6, 7, 8, 9)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr[Value < medianHR], function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# [1] "Window size and num. steps combination that produces the highest sensitivity:"
-# steps_threshold window_size sensitivity
-# 1:               8           5   0.1390948
-
-# TODO: find best window + step threshold combination for each participant? ----
+gridSearch_savePlot_perId(id_sample, gridSearch_diff_window_steps, window_size_list, steps_threshold_list, soft=TRUE)

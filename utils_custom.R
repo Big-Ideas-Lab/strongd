@@ -1,5 +1,8 @@
 library(data.table)
+library(magrittr)
 library(ggplot2)
+library(RColorBrewer)
+library(RcppRoll)
 
 show_linePerGroup <- function(dt, x_colStr, y_colStr, group_colStr = NULL) {
   # returns a ggplot line plot (one line per unique value in the column with name group_colStr)
@@ -19,6 +22,10 @@ show_linePerGroup <- function(dt, x_colStr, y_colStr, group_colStr = NULL) {
 
 save_plot <- function(filename) {
   ggsave(filename, path = "./plots/")
+}
+
+save_plot_temp <- function(filename) {
+  ggsave(filename, path = "./temp_plots/")
 }
 
 # Multiple plot function
