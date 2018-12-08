@@ -261,10 +261,10 @@ dt_results <- gridSearch_window_steps(dt_steps_hr[Value < meanHR], function(...)
 # TODO: Best window + step threshold combination for each participant ----
 # TODO: comparison across arms
 
-gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list, steps_threshold_list, soft = FALSE) {
+gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list, steps_threshold_list, soft = FALSE, save = FALSE) {
   gridSearch_func_name <- substitute(gridSearch_func) %>% as.character()
-  colors <- colorRampPalette(brewer.pal(8, "Dark2"))(length(id_list))
   
+  plots <- list()
   for(i in 1:length(id_list)) {
     id <- id_list[i]
     print(sprintf("Searching for participant with id %s", id))
@@ -278,7 +278,6 @@ gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list
       dt_best <- gridSearch_func(dt_steps_hr[Id == id], window_size_list, steps_threshold_list)  
     }
    
-    
     window_size <- dt_best$window_size
     steps_threshold <- dt_best$steps_threshold
     
@@ -289,17 +288,34 @@ gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list
     dt_steps_hr[(Id == id) & (rolling_sum_steps <= steps_threshold),
                 isRHR := TRUE]
     
-    show_linePerGroup(dt_steps_hr[isRHR == TRUE & Id == id], "ActivityMin", "Value", "Id") +
-      scale_color_manual(values = colors[i])
-    print(sprintf("%s_window=%d_steps=%d_isRHR=TRUE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)))
-    sprintf("%s_window=%d_steps=%d_isRHR=TRUE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
-      save_plot_temp()
+    plots[[(i-1)*2 + 1]] <- show_linePerGroup(dt_steps_hr[isRHR == TRUE & Id == id], "ActivityMin", "Value", "Id") +
+      scale_color_manual(values = "#66C2A5") +
+      ylim(c(20, 220)) +
+      theme(plot.title = element_text(hjust = 0.5, size = 9), axis.title = element_text(size = 7)) +
+      labs(title = sprintf("%s: estimated RHR, window=%d, steps=%d", id, window_size, steps_threshold),
+           x = "Minutes",
+           y = "Heart Rate")
     
-    show_linePerGroup(dt_steps_hr[isRHR == FALSE & Id == id], "ActivityMin", "Value", "Id") +
-      scale_color_manual(values = colors[i])
-    sprintf("%s_window=%d_steps=%d_isRHR=FALSE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
-      save_plot_temp()
+    if (save == TRUE) {
+      sprintf("%s_window=%d_steps=%d_isRHR=TRUE_%s_soft=%s.svg", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
+        save_plot_temp()
+    }
+    
+    plots[[(i-1)*2 + 2]] <- show_linePerGroup(dt_steps_hr[isRHR == FALSE & Id == id], "ActivityMin", "Value", "Id") +
+      scale_color_manual(values = "#FC8D62") +
+      ylim(c(20, 220)) +
+      theme(plot.title = element_text(hjust = 0.5, size = 9), axis.title = element_text(size = 7)) +
+      labs(title = sprintf("%s: estimated regular HR: window=%d, steps=%d", id, window_size, steps_threshold),
+           x = "Minutes",
+           y = "Heart Rate")
+    
+    if (save == TRUE) {
+      sprintf("%s_window=%d_steps=%d_isRHR=FALSE_%s_soft=%s.svg", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
+        save_plot_temp()
+    }
   }
+  
+  return(plots)
 }
 
 # sample 3 participants
@@ -310,4 +326,9 @@ id_sample <- sample(id_list, 3)
 window_size_list <- c(1, 5, 10, 30, 60)  # minutes
 steps_threshold_list <- c(0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)  # num. steps
 
-gridSearch_savePlot_perId(id_sample, gridSearch_diff_window_steps, window_size_list, steps_threshold_list, soft=TRUE)
+
+plots <- gridSearch_savePlot_perId(id_sample, gridSearch_diff_window_steps, window_size_list, steps_threshold_list)
+
+png(filename = sprintf("%s_diff.png", paste(id_sample, collapse="_")), width = 8, height = 6, units = "in", res = 500)
+multiplot(plotlist = plots, layout = matrix(1:(length(id_sample)*2), ncol = 2, byrow=TRUE))
+dev.off()
