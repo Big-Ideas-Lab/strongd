@@ -1,15 +1,15 @@
 
-paper/Background.Rmd
+paper/*.Rmd
 20181023_strongD_hypotheses_Chentian.docx
 cleaning/RData_clean/
 cleaning/Sensitive_StrongD/
 cleaning/data_raw/
 hypothesis_1.Rmd
 hypothesis_1.nb.html
-presentation/20181102_EDA_presentation.Rmd
-presentation/20181102_EDA_presentation.nav
-presentation/20181102_EDA_presentation.snm
-presentation/images/
+*/presentation/*.Rmd
+*/presentation/images/
+*/presentation/*_report*
+temp_plots/
 
 .csv
 
