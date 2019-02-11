@@ -1,5 +1,3 @@
-
-paper/*.Rmd
 20181023_strongD_hypotheses_Chentian.docx
 cleaning/RData_clean/
 cleaning/Sensitive_StrongD/
@@ -11,6 +9,8 @@ hypothesis_1.nb.html
 */presentation/images/
 */presentation/*_report*
 temp_plots/
+*.RData
+*.png
 
 .csv
 

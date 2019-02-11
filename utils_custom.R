@@ -3,6 +3,7 @@ library(magrittr)
 library(ggplot2)
 library(RColorBrewer)
 library(RcppRoll)
+library(tools)
 
 show_linePerGroup <- function(dt, x_colStr, y_colStr, group_colStr = NULL) {
   # returns a ggplot line plot (one line per unique value in the column with name group_colStr)

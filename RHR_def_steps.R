@@ -8,7 +8,7 @@ source("utils_custom.R")
 # see the cleaning directory for details of how this data was cleaned
 
 load("cleaning/RData_clean/dt_steps.RData")
-load("cleaning/RData_clean/dt_hr.RData")
+load("cleaning/RData_clean/dt_hr_filtered.RData")
 load("cleaning/RData_clean/dt_arm_simple.RData")
 
 # Interpolate per second HR measurement for each per minute step measurement ----
@@ -29,13 +29,11 @@ setkey(dt_steps_perMin, Id, join_time)
 # limit interpolation to HR measurement that occur at most 1min (60s) after step measurement
 join_steps_hr <- dt_hr[dt_steps_perMin, roll = -60] 
 dt_steps_hr <- join_steps_hr[, .(Id, ActivityMin, Value, Steps)]
-id_list <- dt_steps_hr$Id %>% unique()  # 78 participants
+# remove step measurements that do not have an interpolated HR value
+dt_steps_hr <- dt_steps_hr[!is.na(Value)]
+id_list <- dt_steps_hr$Id %>% unique()
 
-# dt_steps_hr contains duplicate rows: `dt_steps_hr %>% duplicated() %>% any()` returns TRUE
-# the HR data has duplicate rows --> thus, the join can create duplicates
-# --> remove these duplicates so that we get correct values when we count steps below
 setkey(dt_steps_hr, Id, ActivityMin)
-dt_steps_hr <- unique(dt_steps_hr)
 
 # Outlier Removal ----
 # construct a HR boxplot for each participant
@@ -108,6 +106,10 @@ gridSearch_diff_window_steps <- function(dt_steps_hr, window_size_list, steps_th
     # for each row, keep track of the rolling sum of num. steps within a time window that occurs BEFORE the current row
     # (the table is already sorted by Id and then sorted by ActivityMin within each unique Id value)
     # (the Steps column has no missing values: `dt_steps_hr$Steps %>% is.na() %>% any()`` returns FALSE)
+    
+    # cleanup
+    dt_steps_hr[, rolling_sum_steps := NULL]
+    
     dt_steps_hr[, 
                 rolling_sum_steps := roll_sum(Steps, n, align = "right", fill = NA),
                 by = Id]
@@ -137,12 +139,12 @@ gridSearch_diff_window_steps <- function(dt_steps_hr, window_size_list, steps_th
         dt_combined <- dt_combined[dt_id, on = "Id"]
 
         stopifnot(all(dt_low_summaryHR_byId$Id == dt_high_summaryHR_byId$Id) && all(dt_low_summaryHR_byId$Id == dt_combined$Id))
-
+        
         dt_combined[, low_summaryHR := dt_low_summaryHR_byId$low_summaryHR]
         dt_combined[, high_summaryHR := dt_high_summaryHR_byId$high_summaryHR]
 
-        # absolute difference between high_summaryHR (above threshold) and low_summaryHR (below threshold) for each participant
-        dt_combined[, diff_summaryHR := abs(high_summaryHR - low_summaryHR)]
+        # difference between high_summaryHR (above threshold) and low_summaryHR (below threshold) for each participant
+        dt_combined[, diff_summaryHR := high_summaryHR - low_summaryHR]
 
         # how significant is this difference compared to the range of HR values for each participant?
         # --> find ratio of diff_summaryHR/rangeHR for each participant
@@ -162,24 +164,22 @@ gridSearch_diff_window_steps <- function(dt_steps_hr, window_size_list, steps_th
       setTxtProgressBar(pb, i)
       i = i + 1
     }
-    
-    # cleanup
-    dt_steps_hr[, rolling_sum_steps := NULL]
   }
   
   close(pb)
   
-  print("Window size and num. steps combination that produces the highest sensitivity:")
-  print(dt_results[which.max(dt_results$sensitivity)])
-  
-  return(dt_results[which.max(dt_results$sensitivity)])
+  return(dt_results)
 }
 
 gridSearch_deviation_window_steps <- function(dt_steps_hr, window_size_list, steps_threshold_list) {
   # initialize table with all possible combinations of the step thresholds and window sizes specified above
   dt_results <- data.table(steps_threshold = rep(steps_threshold_list, each = length(window_size_list)),
                            window_size = window_size_list,  # will be recycled
-                           deviation = as.numeric(rep(NA, length(steps_threshold_list)*length(window_size_list))))
+                           RHR_dev = as.numeric(rep(NA, length(steps_threshold_list)*length(window_size_list))),
+                           notRHR_dev = as.numeric(rep(NA, length(steps_threshold_list)*length(window_size_list))),
+                           RHR_median = as.numeric(rep(NA, length(steps_threshold_list)*length(window_size_list))),
+                           notRHR_median = as.numeric(rep(NA, length(steps_threshold_list)*length(window_size_list)))
+                           )
   
   num_participants <- dt_steps_hr$Id %>% unique() %>% length()
   
@@ -187,10 +187,14 @@ gridSearch_deviation_window_steps <- function(dt_steps_hr, window_size_list, ste
   pb <- txtProgressBar(min = 0, max = nrow(dt_results), style = 3)
   i = 1
   for (n in window_size_list) {
+    # cleanup
+    dt_steps_hr[, rolling_sum_steps := NULL]
+    
     dt_steps_hr[, 
                 rolling_sum_steps := roll_sum(Steps, n, align = "right", fill = NA),
                 by = Id]
     
+    # TODO: get rid of multi-id logic
     for (m in steps_threshold_list) {
       # summary HR where rolling_sum_steps <= steps_threshold for each participant
       dt_low_deviationHR_byId <- dt_steps_hr[rolling_sum_steps <= m,
@@ -203,68 +207,66 @@ gridSearch_deviation_window_steps <- function(dt_steps_hr, window_size_list, ste
                                             by = Id]
       
       # only consider participants with who have associated values in BOTH the "low" and "high" tables above
-      id_list <- intersect(dt_low_deviationHR_byId$Id, dt_high_deviationHR_byId$Id)
-      dt_id <- data.table(Id = id_list)
+      # id_list <- intersect(dt_low_deviationHR_byId$Id, dt_high_deviationHR_byId$Id)
+      # dt_id <- data.table(Id = id_list)
       
-      if (nrow(dt_id) >= ceiling(num_participants/2)) {
-        dt_low_deviationHR_byId <- dt_low_deviationHR_byId[dt_id, on = "Id"]
-        dt_high_deviationHR_byId <- dt_high_deviationHR_byId[dt_id, on = "Id"]
-        
-        dt_results[window_size == n & steps_threshold == m]$deviation <- mean(dt_low_deviationHR_byId$low_deviationHR)
-      } else {
-        dt_results[window_size == n & steps_threshold == m]$deviation <- NA
+      # if (nrow(dt_id) >= ceiling(num_participants/2)) {
+      dt_low_deviationHR_byId <- dt_low_deviationHR_byId  #[dt_id, on = "Id"]
+      dt_high_deviationHR_byId <- dt_high_deviationHR_byId  #[dt_id, on = "Id"]
+      
+      if (nrow(dt_low_deviationHR_byId) == 1) {
+        dt_results[window_size == n & steps_threshold == m]$RHR_dev <- dt_low_deviationHR_byId$low_deviationHR 
+      }
+      
+      if (nrow(dt_high_deviationHR_byId) == 1) {
+        dt_results[window_size == n & steps_threshold == m]$notRHR_dev <- dt_high_deviationHR_byId$high_deviationHR 
+      }
+      
+      dt_low_medianHR <- dt_steps_hr[rolling_sum_steps <= m,
+                                     .(low_medianHR = median(Value, na.rm = TRUE)),
+                                     by = Id]
+      dt_high_medianHR <-  dt_steps_hr[rolling_sum_steps > m,.
+                                       (high_medianHR = median(Value, na.rm = TRUE)),
+                                       by = Id]
+      
+      if (nrow(dt_low_medianHR) == 1) {
+        dt_results[window_size == n & steps_threshold == m]$RHR_median <- dt_low_medianHR$low_medianHR
+      }
+      
+      if (nrow(dt_high_medianHR) == 1) {
+        dt_results[window_size == n & steps_threshold == m]$notRHR_median <- dt_high_medianHR$high_medianHR 
       }
       
       setTxtProgressBar(pb, i)
       i = i + 1
     }
-    
-    # cleanup
-    dt_steps_hr[, rolling_sum_steps := NULL]
   }
   
   close(pb)
-  print(dt_results[which.min(dt_results$deviation)])
-  return(dt_results[which.min(dt_results$deviation)])
+  return(dt_results)
 }
 
-
-# Search 1: All participants ----
-
-# step threshold search over different orders of magnitude
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(10, 50, 100, 500, 1000, 5000, 10000)  # num. steps
-
-dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, window_size_list, steps_threshold_list)
-# here, I use median as the summary function, but other summary functions (with the na.rm option) can be used as well
-# see dt_results for the sensitive value corresponding to each possible combination
-
-# step threshold search over thousands
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# step threshold search over hundreds
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(200, 300, 400, 500, 600, 700, 800, 900)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr, function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# since we're interested in **resting** heart rate, let's try this same search over HR values below some threshold
-# e.g. the mean: we want to observe a large sensitivity within the lower HR values rather than all HR values
-meanHR <- mean(dt_steps_hr$Value, na.rm = TRUE)
-
-# step threshold search over hundreds
-window_size_list <- c(1, 5, 10, 30, 60)  # minutes
-steps_threshold_list <- c(200, 300, 400, 500, 600, 700, 800, 900)  # num. steps
-dt_results <- gridSearch_window_steps(dt_steps_hr[Value < meanHR], function(...) {median(...)}, window_size_list, steps_threshold_list)
-
-# TODO: Best window + step threshold combination for each participant ----
+# Best window + step threshold combination for each participant ----
 # TODO: comparison across arms
-
 gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list, steps_threshold_list, soft = FALSE, save = FALSE) {
   gridSearch_func_name <- substitute(gridSearch_func) %>% as.character()
   
   plots <- list()
+  dt_metrics <- data.table(Id = id_list,
+                           penalty = as.numeric(rep(NA, length(id_list))),
+                           steps_threshold = as.numeric(rep(NA, length(id_list))),
+                           window_size = as.numeric(rep(NA, length(id_list))),
+                           RHR_median = as.numeric(rep(NA, length(id_list))),
+                           notRHR_median = as.numeric(rep(NA, length(id_list))),
+                           RHR_mean = as.numeric(rep(NA, length(id_list))),
+                           notRHR_mean = as.numeric(rep(NA, length(id_list))),
+                           RHR_size = as.numeric(rep(NA, length(id_list))),
+                           notRHR_size = as.numeric(rep(NA, length(id_list))),
+                           RHR_max = as.numeric(rep(NA, length(id_list))),
+                           notRHR_max = as.numeric(rep(NA, length(id_list))),
+                           RHR_min = as.numeric(rep(NA, length(id_list))),
+                           notRHR_min = as.numeric(rep(NA, length(id_list)))
+  )
   for(i in 1:length(id_list)) {
     id <- id_list[i]
     print(sprintf("Searching for participant with id %s", id))
@@ -273,21 +275,52 @@ gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list
       softmin <- dt_steps_hr[Id == id]$Value %>% quantile(0.05, na.rm = TRUE)
       softmax <- dt_steps_hr[Id == id]$Value %>% quantile(0.95, na.rm = TRUE)
       
-      dt_best <- gridSearch_func(dt_steps_hr[Id == id & Value < softmax & Value > softmin], window_size_list, steps_threshold_list)  
+      dt_results <- gridSearch_func(dt_steps_hr[Id == id & Value < softmax & Value > softmin], window_size_list, steps_threshold_list)  
     } else {
-      dt_best <- gridSearch_func(dt_steps_hr[Id == id], window_size_list, steps_threshold_list)  
+      dt_results <- gridSearch_func(dt_steps_hr[Id == id], window_size_list, steps_threshold_list)  
     }
+    
+    best_index <- dt_results[, 3] %>% unlist() %>% as.numeric() %>% which.min()
+    dt_best <- dt_results[best_index]
+    print(dt_best)
    
     window_size <- dt_best$window_size
     steps_threshold <- dt_best$steps_threshold
     
+    dt_metrics[Id == id]$penalty <- dt_best[, 3]
+    dt_metrics[Id == id]$steps_threshold <- steps_threshold
+    dt_metrics[Id == id]$window_size <- window_size
+    
     dt_steps_hr[, rolling_sum_steps := NULL]
     dt_steps_hr[Id == id, rolling_sum_steps := roll_sum(Steps, window_size, align = "right", fill = NA)]
     
-    dt_steps_hr[, isRHR := FALSE]
+    dt_steps_hr[, isRHR := NULL]
     dt_steps_hr[(Id == id) & (rolling_sum_steps <= steps_threshold),
                 isRHR := TRUE]
+    dt_steps_hr[(Id == id) & (rolling_sum_steps > steps_threshold),
+                isRHR := FALSE]
     
+    # median
+    dt_metrics[Id == id]$RHR_median <- dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% median()
+    dt_metrics[Id == id]$notRHR_median <- dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% median()
+    
+    # mean
+    dt_metrics[Id == id]$RHR_mean <- dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% mean()
+    dt_metrics[Id == id]$notRHR_mean <- dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% mean()
+    
+    # size
+    dt_metrics[Id == id]$RHR_size <- dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% length()
+    dt_metrics[Id == id]$notRHR_size <- dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% length()
+    
+    # min
+    dt_metrics[Id == id]$RHR_min <- dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% min()
+    dt_metrics[Id == id]$notRHR_min <- dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% min()
+    
+    # max
+    dt_metrics[Id == id]$RHR_max <- dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% max()
+    dt_metrics[Id == id]$notRHR_max <- dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% max()
+    
+    # plots
     plots[[(i-1)*2 + 1]] <- show_linePerGroup(dt_steps_hr[isRHR == TRUE & Id == id], "ActivityMin", "Value", "Id") +
       scale_color_manual(values = "#66C2A5") +
       ylim(c(20, 220)) +
@@ -297,8 +330,8 @@ gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list
            y = "Heart Rate")
     
     if (save == TRUE) {
-      sprintf("%s_window=%d_steps=%d_isRHR=TRUE_%s_soft=%s.svg", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
-        save_plot_temp()
+      sprintf("%s_window=%d_steps=%d_isRHR=TRUE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
+        ggsave(path = "./temp_plots/", width = 8, height = 6, units = "in")
     }
     
     plots[[(i-1)*2 + 2]] <- show_linePerGroup(dt_steps_hr[isRHR == FALSE & Id == id], "ActivityMin", "Value", "Id") +
@@ -310,25 +343,127 @@ gridSearch_savePlot_perId <- function(id_list, gridSearch_func, window_size_list
            y = "Heart Rate")
     
     if (save == TRUE) {
-      sprintf("%s_window=%d_steps=%d_isRHR=FALSE_%s_soft=%s.svg", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
-        save_plot_temp()
+      sprintf("%s_window=%d_steps=%d_isRHR=FALSE_%s_soft=%s.png", id, window_size, steps_threshold, gridSearch_func_name, as.character(soft)) %>%
+        ggsave(path = "./temp_plots/", width = 8, height = 6, units = "in")
     }
   }
   
-  return(plots)
+  return(list("plots" = plots, "dt_metrics" = dt_metrics))
 }
 
+# search ----
 # sample 3 participants
 set.seed(0)
 id_sample <- sample(id_list, 3)
+# id_sample <- c("0036")
 
 # step threshold search over hundreds
 window_size_list <- c(1, 5, 10, 30, 60)  # minutes
 steps_threshold_list <- c(0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)  # num. steps
 
+plots_metrics_list <- gridSearch_savePlot_perId(id_sample, gridSearch_deviation_window_steps, window_size_list, steps_threshold_list, save = TRUE)
 
-plots <- gridSearch_savePlot_perId(id_sample, gridSearch_diff_window_steps, window_size_list, steps_threshold_list)
+plots <- plots_metrics_list$plots
+
+png(filename = sprintf("%s_dev.png", paste(id_sample, collapse="_")), width = 8, height = 6, units = "in", res = 500)
+multiplot(plotlist = plots, layout = matrix(1:(length(id_sample)*2), ncol = 2, byrow=TRUE))
+dev.off()
+
+# fine grain search
+window_size_list <- seq(1, 120, 1)  # minutes
+steps_threshold_list <- seq(0, 1000, 10) # num. steps
+
+plots_metrics_list <- gridSearch_savePlot_perId(id_list, gridSearch_deviation_window_steps, window_size_list, steps_threshold_list, save = TRUE)
+save(plots_metrics_list, file = "plots_metrics_list_dev.RData")
+
+plots_metrics_list <- gridSearch_savePlot_perId(id_list, gridSearch_diff_window_steps, window_size_list, steps_threshold_list, save = TRUE)
+save(plots_metrics_list, file = "plots_metrics_list_diff.RData")
 
 png(filename = sprintf("%s_diff.png", paste(id_sample, collapse="_")), width = 8, height = 6, units = "in", res = 500)
 multiplot(plotlist = plots, layout = matrix(1:(length(id_sample)*2), ncol = 2, byrow=TRUE))
 dev.off()
+
+id <- "0119"
+steps_threshold <- 0
+window_size <- 60
+
+dt_steps_hr[, rolling_sum_steps := NULL]
+dt_steps_hr[Id == id, rolling_sum_steps := roll_sum(Steps, window_size, align = "right", fill = NA)]
+
+dt_steps_hr[, isRHR := NULL]
+dt_steps_hr[(Id == id) & (rolling_sum_steps <= steps_threshold),
+            isRHR := TRUE]
+dt_steps_hr[(Id == id) & (rolling_sum_steps > steps_threshold),
+            isRHR := FALSE]
+
+dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% length()
+dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% length()
+
+dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% median()
+dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% median()
+
+dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% min()
+dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% min()
+
+dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% max()
+dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% max()
+
+# add sd to dt_metrics ----
+load("plots_metrics_list_dev.RData")
+dt_metrics <- plots_metrics_list$dt_metrics
+
+dt_metrics[, RHR_sd := as.numeric(NA)]
+dt_metrics[, notRHR_sd := as.numeric(NA)]
+for (id in dt_metrics$Id %>% unique()) {
+  window_size <- dt_metrics[Id == id]$window_size
+  steps_threshold <- dt_metrics[Id == id]$steps_threshold
+  
+  dt_steps_hr[, rolling_sum_steps := NULL]
+  dt_steps_hr[Id == id, rolling_sum_steps := roll_sum(Steps, window_size, align = "right", fill = NA)]
+  
+  dt_steps_hr[, isRHR := NULL]
+  dt_steps_hr[(Id == id) & (rolling_sum_steps <= steps_threshold),
+              isRHR := TRUE]
+  dt_steps_hr[(Id == id) & (rolling_sum_steps > steps_threshold),
+              isRHR := FALSE]
+  
+  # median
+  dt_metrics[Id == id]$RHR_sd <- dt_steps_hr[(Id == id) & isRHR == TRUE & !is.na(Value)]$Value %>% sd()
+  dt_metrics[Id == id]$notRHR_sd <- dt_steps_hr[(Id == id) & isRHR == FALSE & !is.na(Value)]$Value %>% sd()
+}
+save(dt_metrics, file = "dt_metrics.RData")
+
+# sensitivity analysis ----
+load("plots_metrics_list_dev.RData")
+dt_metrics <- plots_metrics_list$dt_metrics
+
+dt_sameWindow_list <- list()
+dt_sameStep_list <- list()
+# progress bar
+pb <- txtProgressBar(min = 0, max = length(dt_metrics$Id %>% unique()), style = 3)
+i = 1
+for(id in dt_metrics$Id %>% unique()) {
+  print(id)
+  # constant window size, different num steps
+  window_size_list <- dt_metrics[Id == id]$window_size  # minutes
+  steps_threshold_list <- seq(0, 1000, 10)  # num. steps
+  
+  dt_results_sameWindow <- gridSearch_deviation_window_steps(dt_steps_hr[Id == id], window_size_list, steps_threshold_list)
+  dt_results_sameWindow[, Id := id]
+  dt_sameWindow_list <- c(dt_sameWindow_list, list(dt_results_sameWindow))
+  
+  # constant num steps, different window size
+  window_size_list <- seq(1, 120, 1) # minutes
+  steps_threshold_list <- dt_metrics[Id == id]$steps_threshold  # num. steps
+  dt_results_sameStep <- gridSearch_deviation_window_steps(dt_steps_hr[Id == id], window_size_list, steps_threshold_list)
+  dt_results_sameStep[, Id := id]
+  dt_sameStep_list <- c(dt_sameStep_list, list(dt_results_sameStep))
+  
+  i = i + 1
+}
+close(pb)
+
+dt_sameWindow <- rbindlist(dt_sameWindow_list)
+dt_sameStep <- rbindlist(dt_sameStep_list)
+save(dt_sameWindow, file = "dt_sameWindow.RData")
+save(dt_sameStep, file = "dt_sameStep.RData")
