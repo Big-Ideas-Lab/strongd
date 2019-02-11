@@ -44,6 +44,9 @@ dt_hr_clinical$Date <- as.Date(dt_hr_clinical$Date, format = "%m/%d/%y")
 # dt_fitness$Date %>% class()
 # dt_hr_clinical$Date %>% class()
 
+# remove rows where all RHR-related measurements are NA
+dt_hr_clinical <- dt_hr_clinical[!is.na(HR_perMin_lying) | !is.na(HR_perMin_sitting) | !is.na(HR_perMin_standing) | !is.na(RHR)]
+
 save(dt_fitness, file = FILE_PATH_FITNESS)
 save(dt_hr_clinical, file = FILE_PATH_HR)
 

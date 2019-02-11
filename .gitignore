@@ -4,6 +4,7 @@ paper/*.Rmd
 cleaning/RData_clean/
 cleaning/Sensitive_StrongD/
 cleaning/data_raw/
+cleaning/RData_intermediate/
 hypothesis_1.Rmd
 hypothesis_1.nb.html
 */presentation/*.Rmd

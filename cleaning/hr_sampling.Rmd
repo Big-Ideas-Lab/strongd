@@ -1,0 +1,58 @@
+---
+title: "Per Second Heart Rate Data Sampling"
+output: html_notebook
+---
+
+The per second heart rate data starts on 08/01/2017 and ends on 09/27/2018 (423 days, inclusive of start and end dates). It's divided into 3 files:
+
+* `20170801_20180315_heartrate_seconds_merged_sample.csv`
+* `20180316_20180701_heartrate_seconds_merged_sample.csv` 
+* `20180702_20180927_heartrate_seconds_merged_sample.csv`
+
+This sampling will retrieve the first 85-day (20% of 423 is ~85) contiguous block of measurements for each participant. 
+
+Different participants have measurements starting on different dates and lasting for different amounts of time. Sampling the first 85-day block of measurements relative to each participant's start date will create some consistency. Participants that have significantly less measurements (e.g. they don't have measurements for the whole 85-day block) will later be removed.
+
+This sampling will:
+
+1. Concatenate all 3 files into one large data.table structure.
+2. Remove measurements that occur during night times (10pm to 6am).
+3. Sample amd save only the first 85-day contiguous block of measurements for each participant.
+
+See `sample.R` for code.
+
+```{r}
+library(data.table)
+library(magrittr)
+```
+
+## Sampled Per Second Heart Rate Data Overview
+
+```{r}
+load("RData_intermediate/allHR_85days.RData")
+```
+
+
+```{r}
+dt_sample
+```
+
+Number of participants (number of unique Ids):
+```{r}
+dt_sample$Id %>% unique() %>% length()
+```
+
+Number of measurements per participant:
+```{r}
+dt_sample[, .N, by=Id]
+# note: participants with too few measurements will be removed later
+```
+
+There are no missing heart rate values:
+```{r}
+dt_sample$Value %>% is.na() %>% sum() %>% divide_by(nrow(dt_sample))
+```
+
+
+
+
