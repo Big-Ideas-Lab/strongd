@@ -11,7 +11,9 @@ hypothesis_1.nb.html
 temp_plots/
 *.RData
 *.png
+images/
 hypothesis_3/plots/
+*.pptx
 
 .csv
 
