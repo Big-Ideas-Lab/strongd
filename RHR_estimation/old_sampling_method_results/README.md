@@ -1,0 +1,1 @@
+This directory contains documented results that use the old sampling method described in the R notebook `hr_sampling_merging.Rmd`.

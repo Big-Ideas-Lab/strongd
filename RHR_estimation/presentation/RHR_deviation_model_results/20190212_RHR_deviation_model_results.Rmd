@@ -1,0 +1,106 @@
+---
+title: "Resting Heart Rate Deviation Model Results"
+author: "Chentian Jiang"
+date: "2/12/2019"
+output: beamer_presentation
+header-includes:
+  - \usepackage[font={scriptsize}]{caption}
+  - \usepackage{tabularx}
+  - \DeclareMathOperator*{\argmin}{arg\,min}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Outline
+1. (Strong-D Recap)
+2. Model
+3. Results
+
+## Strong-D Study Recap
+Strength Training Regimen for Normal Weight Diabetics
+
+- Goal: determine the best exercise regimen for normal weight participants with Type 2 Diabetes
+  - Manipulated variables: strength vs aerobic vs combined exercises
+  - Response variable: indirect measures of blood sugar levels
+- Data:
+  - Fitbit: frequent measurements, e.g. per second raw heart rate
+  - iPad sign-in data, e.g. study arm data
+  - Clinical + demographics data, e.g. weight, race
+
+## Model: Design
+
+```{r, out.width='4.5in', fig.align='center', fig.cap="RHR Estimation Model."}
+knitr::include_graphics('images/model_viz.png')
+```
+
+## Model: Optimization
+Motivation: HR *variability* is positively correlated with exercise intensity. $\Rightarrow$ RHR has _lower_ variability.
+
+\begin{align*}
+n^*,m^* &= \argmin_{n,m}SD(S_{n,m}) \\
+n &\in \{x \in \mathbb{Z}: 0 \leq x \leq 1000 \text{ and } x \bmod 10 = 0\} \\
+m &\in \{x \in \mathbb{Z}: 1 \leq x \leq 120\}
+\end{align*}
+
+## Results: Optimal Parameters and Median Comparison
+
+```{r, out.width='4.5in', fig.align='center', fig.cap="Metrics related to estimated RHR. For each participant, the bottom plot shows the optimal number of steps ($n^{*}$) and time window size ($m^{*}$). The top plot compares corresponding RHR estimates (blue squares) to the estimated non-RHR values (red triangles) and the median of all sampled HR measurements (black circles)."}
+knitr::include_graphics('images/medians_step_window.png')
+```
+
+## Model: Design
+
+```{r, out.width='4.5in', fig.align='center', fig.cap="RHR Estimation Model."}
+knitr::include_graphics('images/model_viz.png')
+```
+
+## Results: Sensitivity Analysis for Steps
+```{r, out.width='4.5in', fig.align='center', fig.cap="Sensitivity analysis of the mean RHR estimates over all participants for each step value while holding the optimum window size constant."}
+knitr::include_graphics('images/step_change.png')
+```
+
+## Results: Sensitivity Analysis for Window Size
+```{r, out.width='4.5in', fig.align='center', fig.cap="Sensitivity analysis of the mean RHR estimates over all participants for each time window size while holding the optimum step value constant."}
+knitr::include_graphics('images/window_change.png')
+```
+
+## Results: Comparisons
+$RHR_{clinic} = mean(\text{supine/sitting/standing RHRs})$
+\bigbreak
+
+\begin{table}
+	\centering
+	\caption{\label{table:means}Comparison of metrics averaged over all participants.}
+	\begin{tabularx}{\textwidth}{X|r|r|r}
+		\hline
+		& Est. RHR & Est. non-RHR & Clinic RHR\\
+		\hline
+		Mean Value (bpm) & 73.02 & 84.33 & 76.09\\
+		\hline
+		Mean SD (bpm) & 7.80 & 14.33 & N/A\\
+		\hline
+		Mean Num. Measurements & 18257.76 & 41206.76 & N/A\\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\bigbreak
+Literature:
+
+- HR is positively correlated with exercise intensity. $\Rightarrow$ RHR has _lower_ values.
+- HR *variability* is positively correlated with exercise intensity. $\Rightarrow$ RHR has _lower_ variability.
+
+## Model: Design
+
+```{r, out.width='4.5in', fig.align='center', fig.cap="RHR Estimation Model."}
+knitr::include_graphics('images/model_viz.png')
+```
+
+## Results: Comparison with Clinical RHR
+```{r, out.width='4.5in', fig.align='center', fig.cap="Linear regression of $RHR_{est}$ versus $RHR_{clinic}$ values for the deviation penalty. Each data point represents a participant. The solid line compares the clinical RHR with the estimated RHR ($R^2 = 0.32$, $P = 1.32 \\times 10^6$). The dashed line represents the target scenario, where $RHR_{est}$ perfectly recapitulates $RHR_{clinic}$."}
+knitr::include_graphics('images/est_vs_clinical_rhr.png')
+```
+
+$MAE = \frac{1}{N} \sum |y - \hat{y}| = 7.53$bpm

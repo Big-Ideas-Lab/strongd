@@ -1,0 +1,81 @@
+---
+title: "Report"
+author: "Chentian Jiang"
+date: "11/29/2018"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Sensitivity Calculation: Overview
+Define RHR in terms of **total number of steps** taken within a **time window** of some length:
+
+Idea: is to find a num. steps and time window combination that is good at separating high HR from low HR (or RHR).
+
+Specifically, we want to threshold the num. steps taken within a time window such that there is a great "difference" between HR values for num. steps taken **below** this threshold and HR values taken **above** this threshold.
+
+## Sensitivity Calculation: Method
+
+1. For a time window of size n, find the rolling sum of steps taken within time window.
+2. For a num. steps threshold m, find a **per participant** summary statistic, e.g. median, for HR values corresponding to entries with steps rolling sum <= m; let's call this low_summaryHR. Repeat for entries with steps rolling sum > m; let's call this `high_summaryHR`.
+3. For each participant, calculate `diff_summaryHR = abs(high_summaryHR - low_summaryHR)`.
+4. For each participant, to see how significant diff_summaryHR is **relative to the range of that participant's HR values (rangeHR)**, calculate `ratio_diff_range = diff_summaryHR/rangeHR`.
+5. Finally, we have a `ratio_diff_range` measure for each participant. Aggregate these values with a mean function to get an overall measurement of the "difference" concept. Let's call this **sensitivity**.
+
+## Sensitivity Calculation: Define RHR
+Goal: find a time window of size `n` and num. steps threshold `m` combination that **maximizes sensitivity**. This combination of parameters maximizes the "difference" of HR when comparing HR for entries below the threshold vs entries above the threshold, i.e. this combination of parameters is good that separating low from high HR values.
+
+These lower HR values will be used to **define RHR**: I will define RHR as HR values that occur when the total number of steps <= `m` within a time window of size `n`.
+
+## Results: RHR (best parameters calculated on all participants)
+![](../temp_plots/0119_window=10_steps=1000_isRHR=TRUE.png)
+
+## Results: not RHR (best parameters calculated on all participants)
+![](../temp_plots/0119_window=10_steps=1000_isRHR=FALSE.png)
+
+## Results: RHR (best parameters calculated on specific participant)
+![](../temp_plots/0119_window=5_steps=600_isRHR=TRUE.png)
+
+## Results: not RHR (best parameters calculated on all participants)
+![](../temp_plots/0119_window=5_steps=600_isRHR=FALSE.png)
+
+## Results: RHR (best parameters calculated on specific participant, with soft max/min)
+![](../temp_plots/0119_window=10_steps=800_isRHR=TRUE_soft.png)
+
+## Results: not RHR (best parameters calculated on specific participants, with soft max/min)
+![](../temp_plots/0119_window=10_steps=800_isRHR=FALSE_soft.png)
+
+# Maximize "Difference"
+
+## 0019
+![](../temp_plots/0119_window=5_steps=600_isRHR=TRUE_gridSearch_diff_window_steps.png)
+
+## 0019
+![](../temp_plots/0119_window=5_steps=600_isRHR=FALSE_gridSearch_diff_window_steps.png)
+
+# Minimize "Deviation"
+
+## 0119
+![](../temp_plots/0119_window=60_steps=0_isRHR=TRUE_gridSearch_deviation_window_steps.png)
+
+## 0119
+![](../temp_plots/0119_window=60_steps=0_isRHR=FALSE_gridSearch_deviation_window_steps.png)
+
+
+# Maximize "Difference"
+
+## 0036
+![](../temp_plots/0036_window=5_steps=600_isRHR=TRUE_gridSearch_diff_window_steps.png)
+
+## 0036
+![](../temp_plots/0036_window=5_steps=600_isRHR=FALSE_gridSearch_diff_window_steps.png)
+
+# Minimize "Deviation"
+
+## 0036
+![](../temp_plots/0036_window=5_steps=0_isRHR=TRUE_gridSearch_deviation_window_steps.png)
+
+## 0036
+![](../temp_plots/0036_window=5_steps=0_isRHR=FALSE_gridSearch_deviation_window_steps.png)

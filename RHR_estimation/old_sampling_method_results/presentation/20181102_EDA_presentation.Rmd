@@ -1,0 +1,136 @@
+---
+title: "Strong-D: Heart Rate EDA"
+author: "Chentian Jiang"
+date: "11/2/2018"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Outline
+1. Strong-D Study
+2. Background
+3. Big Ideas Lab Hypothesis
+4. Data Preprocessing
+5. EDA: Resting Heart Rate, Time, Exercise Intensity Level
+6. Next Steps
+
+## Strong-D Study
+Strength Training Regimen for Normal Weight Diabetics
+
+- Goal: determine the best exercise regimen for normal weight participants with Type 2 Diabetes
+  - Manipulated variables: strength vs aerobic vs combined exercises
+  - Response variable: blood sugar levels
+- Data:
+  - Fitbit: frequent measurements, e.g. per second raw heart rate
+  - iPad sign-in data, e.g. study arm data
+  - Clinical + demographics data, e.g. weight, race
+
+## Participants
+![Participant demographics by study arm.](./images/demographics_arm.png)
+
+source: https://osf.io/ku56d/
+
+## Background: Diabetes
+- Elevated levels of blood glucose (hyperglycemia) 
+- Insulin signals cells to absorb glucose from the blood
+- Type 1 diabetes: impaired insulin production
+- **Type 2 diabetes**: insulin resistance
+- Lifestyle interventions, e.g. exercise
+
+## Background: Resting Heart Rate (RHR) and Fitness
+- "a higher average number of steps per day is associated with lower resting HR"
+  - Li X, Dunn J, Salins D, Zhou G, Zhou W, Schüssler-Fiorenza Rose SM, et al. Digital Health: Tracking Physiomes and Activity Using Wearable Biosensors Reveals Useful Health-Related Information. PLoS Biol. 2017;15(1):e2001402.
+- "meta-analysis indicates a strong positive association between high resting heart rate and the risk of type 2 diabetes"
+  - Aune D, ó Hartaigh B, Vatten LJ. Resting heart rate and the risk of type 2 diabetes: A systematic review and dose–response meta-analysis of cohort studies. Nutrition, Metabolism and Cardiovascular Diseases. 2015 Jun 1;25(6):526–34.
+  
+**Want: Decreasing RHR over the course of the study.**
+
+## Big Ideas Lab Hypothesis
+### Current Hypothesis: How does Resting Heart Rate (RHR) change over time?
+- Correlation with fitness level (to be investigated)
+- Compare across study arms
+
+# How does Resting Heart Rate (RHR) change over time?
+
+## Data Preprocessing
+![Data preprocessing flowchart.](images/preprocessing_flow.png)
+
+## EDA: Resting Heart Rate, Time, Exercise Intensity Level
+How do we _define_ RHR?
+
+1. Fitbit's calculation of RHR
+2. Raw (per second) heart rate values at sedentary intensity level 
+  - 0: sedentary, 1: light, 2: moderate, 3: very active
+  - Intensity levels are calculated by Fitbit
+
+Limitations of these definitions?
+
+To be investigated:
+
+- Raw heart rate values during time periods with infrequent steps
+
+# Proposed RHR Definition 1: Fitbit's Calculation
+
+## Def 1: RHR per Day per Study Arm
+![RHR (calculated by Fitbit) per day, faceted by study arm.](../plots/RHR_fitbit_perArm.png)
+
+- Each color represents a different participant (79)
+  - Better use of colors?
+- **Limitation: missing values**
+
+## Def 1: Median RHR per Day per Study Arm
+![Median RHR per day, faceted by study arm.](../plots/medianRHR_fitbit_perArm.png)
+
+- Median line for each study arm plot from the previous slide
+- Trend does not suggest decreasing RHR
+
+# Proposed Definition 2: Raw (per second) heart rate values at sedentary intensity level
+
+## Def 2: Heart Rate per Intensity Level
+- Advantage: raw per second HR data has no missing values!
+
+![HR per intensity level.](../plots/HR_perIntensity_boxplot.png){height=70%}
+
+## Def 2: Heart Rate per Intensity Level per Study Arm
+![HR per intensity level, faceted by study arm.](../plots/HR_perIntensity_perArm_boxplot.png){height=70%}
+
+- Outliers (absolute distance $>1.5*IQR$ from the 1st or 3rd quartile)
+
+## Def 2: RHR per Second per Study Arm
+![RHR (sedentary intensity) per second for a few participants, faceted by study arm.](../plots/RHR_intensity0_perSecond.png){height=50%}
+
+- Limitations: 
+  - Noise
+  - Not possible to plot all participants
+- Aggregation
+
+## Def 2: Minimum RHR per Day per Study Arm
+![Min. RHR (sedentary intensity) per day, faceted by study arm.](../plots/minRHR_intensity0_perDay_perArm.png)
+
+- Minimum could be an outlier
+
+## Def 2: Lower Quartile RHR per Day per Study Arm
+![Lower quartile RHR (sedentary intensity) per day, faceted by study arm.](../plots/quart1RHR_intensity0_perDay_perArm.png)
+
+- Outliers
+- No decreasing trend
+
+## Def 2: Limitations
+- Outliers
+- Intensity levels are calculated by Fitbit
+  - Proprietary algorithm
+  - Possibly calculated with HR values --> what does it mean to relate intensity and HR?
+
+## Next Steps
+### Address Limitations
+- Fitbit calculations
+- Outlier removal
+- Revise RHR definition
+  - Raw heart rate values during time periods with infrequent steps
+
+### Fitness Level
+- Correlation between RHR and fitness level
+

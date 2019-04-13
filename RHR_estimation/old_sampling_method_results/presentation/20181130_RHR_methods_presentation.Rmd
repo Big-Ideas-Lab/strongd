@@ -1,0 +1,189 @@
+---
+title: "Strong-D: Methods for Defining Resting Heart Rate"
+author: "Chentian Jiang"
+date: "11/30/2018"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Outline
+1. Recap: Strong-D Study
+2. Recap: Problems with Defining RHR
+3. Goal
+4. Motivation
+5. **Methods**
+6. Next Steps
+
+## Recap: Strong-D Study
+Strength Training Regimen for Normal Weight Diabetics
+
+- Goal: determine the best exercise regimen for normal weight participants with Type 2 Diabetes
+  - Manipulated variables: strength vs aerobic vs combined exercises
+  - Response variable: blood sugar levels
+- Data:
+  - Fitbit: frequent measurements, e.g. per second raw heart rate
+  - iPad sign-in data, e.g. study arm data
+  - Clinical + demographics data, e.g. weight, race
+
+## Recap: Problems with Defining RHR
+- Fitbit calculations
+  - Proprietary
+  - Calculated features might already incorporate HR values --> cannot use these to define RHR.
+- Outliers
+
+## Goal: Define RHR (1) through a Data-Driven Method (2).
+Note: The goal of our lab uses the _data_ from the Strong-D study but is not directly aligned with the _goals_ of the Strong-D study.
+
+## Motivation (1): Why define RHR?
+RHR is a biomarker/predictor for many health conditions, such as:
+
+- type 2 diabetes
+- hypertension
+- coronary artery disease
+- heart failure
+- cognitive decline
+- renal impairment
+- endothelial dysfunction
+
+1. Aune D, Ó Hartaigh B, Vatten LJ. Resting heart rate and the risk of type 2 diabetes: A systematic review and dose--response meta-analysis of cohort studies. Nutr Metab Cardiovasc Dis. 2015 Jun;25(6):526–34. 
+
+2. Böhm M, Reil J-C, Deedwania P, Kim JB, Borer JS. Resting heart rate: risk indicator and emerging risk factor in cardiovascular disease. Am J Med. 2015 Mar;128(3):219–28.
+
+## Motivation (2): Traditional HR Measurement
+![Manual Pulse Measurement (source: https://www.health.harvard.edu/media/content/images/WristPulse_WL1601_ts119438355.png)](images/WristPulse_WL1601_ts119438355.png){height=25%}
+
+![ECG Machine for HR Measurement (source: https://www.renderhub.com/dekogon-studios/ecg-machine-hospital-hpl-pbr-game-ready-3d-model/ecg-machine-hospital-hpl-pbr-game-ready-3d-model-08.jpg)](images/ecg-machine-hospital-hpl-pbr-game-ready-3d-model-08.jpg){height=25%}
+
+## Motivation (2): Traditional HR Measurement
+
+Limitations:
+
+- Inconvenient
+- Infrequent measurements
+- ECG tests are costly
+- Manual pulse measurements are very coarse-grain measurements
+
+Advantages:
+
+- Manual pulse measurements are very accessible
+- ECG readings are precise and are taken under controlled settings (limited noise)
+
+## Motivation (2): Technology-Enabled HR Measurement
+![Fitbit for HR Measurement (source: https://secure.i.telegraph.co.uk/multimedia/archive/03189/ChargeHR2_3189151b.jpg)](images/ChargeHR2_3189151b.jpg){height=50%}
+
+## Motivation (2): Technology-Enabled HR Measurement
+Advantages:
+
+- Convenient
+- More frequent measurements
+- Becoming more accessible
+- **Lots of data!**
+
+Limitations:
+
+- Lots of noise
+
+## Motivation (2): Why define RHR based on Fitbit data?
+If we can develop a method that accurately defines RHR using Fitbit **data**, we can monitor RHR in a way that takes advantage of the previously mentioned advantages:
+
+- Convenient
+- More frequent measurements
+- Becoming more accessible
+
+Food for thought: Considering all the noise in Fitbit data, how can we validate the accuracy of RHR that is defined in such a way?
+
+## Methods: Define RHR in terms of Steps
+First, join steps data with HR data: For each participant, for each step, what is the temporally closest HR value that occurs within 1min _after_ the steps measurement?
+
+![Right outer join for HR (left) and steps (right) data, rolled backward by max 1min.](images/join_steps_hr.png){height=50%}
+
+## Method 1: Define RHR with a "difference" metric
+Define RHR in terms of **total number of steps** taken within a **time window of some length**:
+
+### Idea 1: Find a number of steps and time window size combination that is good at separating high HR from low HR (or RHR).
+
+Specifically, we want to threshold the num. steps taken within a time window such that there is a great "difference" between HR values for num. steps taken **below** this threshold and HR values taken **above** this threshold.
+
+## Method 1: Define RHR with a "difference" metric
+Input: joined steps and HR data for **one participant**: we want to define RHR in a way that is specific to each participant.
+
+![For a time window of size $n$, find the rolling sum of steps taken within this time window.](images/steps_rolling_sum.png){height=60%}
+
+## Method 1: Define RHR with a "difference" metric
+
+![For a num. steps threshold $m$, find a summary statistic, e.g. median, for HR values corresponding to entries with steps rolling $sum <= m$; let's call this `low_summaryHR`. Repeat for entries with steps rolling $sum > m$; let's call this `high_summaryHR`.](images/steps_lowHigh_summaryHR.png){height=70%}
+
+## Method 1: Define RHR with a "difference" metric
+Calculate `diff_summaryHR = abs(high_summaryHR - low_summaryHR)`.
+
+To see how significant diff_summaryHR is **relative to the range of the participant's HR values (rangeHR)**, calculate `ratio_diff_range = diff_summaryHR/rangeHR`.
+
+Finally, we have a `ratio_diff_range` measure for the one input participant.
+
+## Method 1: Define RHR with a "difference" metric
+### Goal: find a time window of size `n` and num. steps threshold `m` combination that **maximizes "difference"**.
+
+- This combination of parameters maximizes the "difference" of HR when comparing HR for entries below the threshold vs entries above the threshold, i.e. this combination of parameters is good that separating low from high HR values.
+
+These lower HR values will be used to **define RHR**: I will define RHR as HR values that occur when the total number of steps <= `m` within a time window of size `n`.
+
+## Method 1: Results for Id=0019
+![window=5, steps=600, isRHR=TRUE](../temp_plots/0119_window=5_steps=600_isRHR=TRUE_gridSearch_diff_window_steps.png){height=30%}
+
+![window=5, steps=600, isRHR=FALSE](../temp_plots/0119_window=5_steps=600_isRHR=FALSE_gridSearch_diff_window_steps.png){height=30%}
+
+## Method 1: Results for Id=0036
+![window=5, steps=600, isRHR=TRUE](../temp_plots/0036_window=5_steps=600_isRHR=TRUE_gridSearch_diff_window_steps.png){height=30%}
+
+![window=5, steps=600, isRHR=FALSE](../temp_plots/0036_window=5_steps=600_isRHR=FALSE_gridSearch_diff_window_steps.png){height=30%}
+
+## Method 1: Results for Id=0047
+![window=5, steps=700, isRHR=TRUE](../temp_plots/0047_window=5_steps=700_isRHR=TRUE_gridSearch_diff_window_steps.png){height=30%}
+
+![window=5, steps=700, isRHR=FALSE](../temp_plots/0047_window=5_steps=700_isRHR=FALSE_gridSearch_diff_window_steps.png){height=30%}
+
+## Method 1: Results for Id=0047, with Soft-Max/Min
+![window=5, steps=600, isRHR=TRUE](../temp_plots/0047_window=5_steps=600_isRHR=TRUE_gridSearch_diff_window_steps_soft=TRUE.png){height=30%}
+
+![window=5, steps=600, isRHR=FALSE](../temp_plots/0047_window=5_steps=600_isRHR=FALSE_gridSearch_diff_window_steps_soft=TRUE.png){height=30%}
+
+## Method 2: Define RHR with a "deviation" metric
+Define RHR in terms of **total number of steps** taken within a **time window of some length**:
+
+### Idea 2: Find a number of steps and time window size combination that is good at finding a range of low HR (or RHR) with **low deviation**.
+
+## Method 2: Define RHR with a "deviation" metric
+Method 2 is implemented in the same way as method 1 with the exception of these aspects:
+
+- Method 1 uses median as the summary function, while method 2 uses standard deviation as the summary function.
+- Method 1 maximizes (the ratio of) the difference `high_summaryHR - low_summaryHR`, while method 2 minimizes `low_summaryHR`.
+
+## Method 2: Define RHR with a "deviation" metric
+![For method 2, the summary function used is the standard deviation. We want to minimize low_summaryHR (lower left node on the diagram).](images/steps_lowHigh_summaryHR.png){height=70%}
+
+## Method 2: Results for Id=0119
+![window=60, steps=0, isRHR=TRUE](../temp_plots/0119_window=60_steps=0_isRHR=TRUE_gridSearch_deviation_window_steps.png){height=30%}
+
+![window=60, steps=0, isRHR=FALSE](../temp_plots/0119_window=60_steps=0_isRHR=FALSE_gridSearch_deviation_window_steps.png){height=30%}
+
+## Method 2: Results for Id=0036
+![window=5, steps=0, isRHR=TRUE](../temp_plots/0036_window=5_steps=0_isRHR=TRUE_gridSearch_deviation_window_steps.png){height=30%}
+
+![window=5, steps=0, isRHR=FALSE](../temp_plots/0036_window=5_steps=0_isRHR=FALSE_gridSearch_deviation_window_steps.png){height=30%}
+
+## Method 2: Results for Id=0047
+![window=10, steps=100, isRHR=TRUE](../temp_plots/0047_window=10_steps=100_isRHR=TRUE_gridSearch_deviation_window_steps.png){height=30%}
+
+![window=10, steps=100, isRHR=FALSE](../temp_plots/0047_window=10_steps=100_isRHR=FALSE_gridSearch_deviation_window_steps.png){height=30%}
+
+## Next Steps
+
+- Validation
+  - "Considering all the noise in Fitbit data, how can we validate the accuracy of RHR that is defined in such a way?"
+  - e.g. Compare my defined RHR with RHR measurements from the clinical data
+- Compare window and step thresholds across arms
+- Outliers
+
