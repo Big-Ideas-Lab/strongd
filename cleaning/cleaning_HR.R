@@ -38,6 +38,10 @@ dt_hr_all$Id <- dt_hr_all$Id %>% substring(7, 10)
 dt_hr$Value <- as.numeric(dt_hr$Value)
 dt_hr_all$Value <- as.numeric(dt_hr_all$Value)
 
+"Removing duplicates..."
+dt_hr <- unique(dt_hr, by = c("Id", "Time"))
+dt_hr_all <- unique(dt_hr_all, by = c("Id", "Time"))
+
 "Saving..."
 save(dt_hr, file = FILE_PATH_85)
 save(dt_hr_all, file = FILE_PATH_ALL)
