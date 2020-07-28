@@ -15,7 +15,8 @@ images/
 hypothesis_3/plots/
 *.pptx
 
-.csv
+*.csv
+*.pickle
 
 # Created by https://www.gitignore.io/api/r
 
