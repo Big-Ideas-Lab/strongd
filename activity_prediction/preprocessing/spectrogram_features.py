@@ -125,8 +125,8 @@ def get_participant_spectrogram_features(
     :param participant_df: pandas dataframe indexed on a datetime
         column. This contains data for a *single* participant and
         contains the column specified in the parameter
-        ``spectrogram_col`` in addition to the datetime index. :param
-        time_delta_threshold: a pandas.Timedelta object. If two
+        ``spectrogram_col`` in addition to the datetime index. 
+    :param time_delta_threshold: a pandas.Timedelta object. If two
         consecutive timestamps T1 and T2 in participant_df have ``(T2 -
         T1) > time_delta_threshold``, then separate spectrograms will be
         returned for observations preceding (and including) T1 versus
