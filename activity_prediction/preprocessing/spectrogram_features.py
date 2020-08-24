@@ -106,14 +106,14 @@ def get_participant_spectrogram_features(
     Usually, Fourier transforms and spectrograms assume a constant
     sampling rate in the data, but this is not the case in the Strong-D
     Fitbit data: most but not all steps data are sampled at 1
-    observation per minute, and many but not all HR data are sampled at
-    1 observation per 5 seconds. For large gaps in the sampling rate,
+    observation per minute, and most but not all HR data are sampled at
+    1 observation per 3 seconds. For large gaps in the sampling rate,
     e.g. 1 day, this function calculates separate spectrograms for the
     data before versus after the large gap (see the
-    ``time_delta_threshold`` parameter). For other smaller
-    inconsistencies in the sampling rate, e.g. 1 second versus 5 second
-    delta between consecutive observations, this function calculates one
-    spectrogram that *assumes* a constant sampling rate. 
+    ``time_delta_threshold`` parameter). To calculate spectrograms on
+    smaller inconsistencies in the sampling rate, e.g. 1 second versus 5
+    second delta between consecutive observations, this function
+    calculates one spectrogram that *assumes* a constant sampling rate. 
 
     For Strong-D steps data, the assumed constant sampling rate is 1
     sample per min (median time delta between consecutive steps
@@ -142,7 +142,12 @@ def get_participant_spectrogram_features(
     :spectrogram_window_size: number of consecutive samples used to
         calculate each windowed Fourier transform within the
         spectrogram. This corresponds to the ``nperseg`` parameter in
-        scipy.signal.spectrogram. 
+        scipy.signal.spectrogram. If a spectrogram is calculated by a
+        dataframe with ``nrows < spectrogram_window_size`` (most likely
+        as a result of splitting the input ``participant_df`` according
+        to the ``time_delta_threshold`` parameter), it will be returned
+        in ``spectrograms`` but will *not* be transformed and returned
+        in ``features_df`` (see the ``returns`` documentation below).
     :returns: a tuple ``(features_df, spectrograms)``. ``spectrograms`` 
         is a pandas series containing >=1 spectrograms (see the
         ``time_delta_threshold`` parameter to understand how there can
@@ -201,6 +206,16 @@ def get_participant_spectrogram_features(
     for i in range(len(spectrograms)):
         # extract the frequency, time and spectrogram values
         (f, t, Sxx) = spectrograms.loc[i]
+
+        if len(f) < (spectrogram_window_size // 2 + 1):
+            print(
+                "Discarding the spectrogram features produced by a dataframe with ``nrows < spectrogram_window_size``. The spectrogram will be returned in ``spectrograms`` but not in ``features_df``."
+            )
+            # if the dataframe used to produce the spectrogram has
+            # [nrows < spectrogram_window_size], then the number of
+            # frequency bands would be less than
+            # [floor(spectrogram_window_size/2) + 1]
+            continue
 
         # retrieve the original timestamps
         time = participant_df.groupby("group").get_group(i).index[0] + pd.to_timedelta(
