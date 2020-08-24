@@ -52,7 +52,7 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
     for participant_id in tqdm(id_set):
         steps_features_df, _ = get_participant_spectrogram_features(
             participant_df=steps_df.loc[participant_id],
-            time_delta_threshold=pd.Timedelta("1hour"),
+            time_delta_threshold=pd.Timedelta("1D"),
             spectrogram_col="Steps",
             spectrogram_samples_per_sec=1 / 60,
             spectrogram_window_size=window_size,
@@ -61,7 +61,7 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
 
         hr_features_df, _ = get_participant_spectrogram_features(
             participant_df=hr_df.loc[participant_id],
-            time_delta_threshold=pd.Timedelta("1hour"),
+            time_delta_threshold=pd.Timedelta("1D"),
             spectrogram_col="Value",
             spectrogram_samples_per_sec=1 / 5,
             spectrogram_window_size=window_size,
@@ -77,14 +77,14 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
     )
     with open(steps_save_path, "wb") as f:
         pickle.dump(all_steps_features_df, f)
-    print("Saved steps spectrogram features.")
+    print(f"Saved steps spectrogram features to {steps_save_path}.")
 
     hr_save_path = os.path.join(
         save_dir, f"hr_spectrogram_features_df_window={window_size}.pickle"
     )
     with open(hr_save_path, "wb") as f:
         pickle.dump(all_hr_features_df, f)
-    print("Saved HR spectrogram features.")
+    print(f"Saved HR spectrogram features to {hr_save_path}.")
 
     return (all_steps_features_df, all_hr_features_df)
 
@@ -109,7 +109,7 @@ def get_participant_spectrogram_features(
     Fitbit data: most but not all steps data are sampled at 1
     observation per minute, and many but not all HR data are sampled at
     1 observation per 5 seconds. For large gaps in the sampling rate,
-    e.g. 1 hour, this function calculates separate spectrograms for the
+    e.g. 1 day, this function calculates separate spectrograms for the
     data before versus after the large gap (see the
     ``time_delta_threshold`` parameter). For other smaller
     inconsistencies in the sampling rate, e.g. 1 second versus 5 second
