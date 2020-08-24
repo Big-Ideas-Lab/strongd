@@ -142,12 +142,7 @@ def get_participant_spectrogram_features(
     :spectrogram_window_size: number of consecutive samples used to
         calculate each windowed Fourier transform within the
         spectrogram. This corresponds to the ``nperseg`` parameter in
-        scipy.signal.spectrogram. If a spectrogram is calculated by a
-        dataframe with ``nrows < spectrogram_window_size`` (most likely
-        as a result of splitting the input ``participant_df`` according
-        to the ``time_delta_threshold`` parameter), it will be returned
-        in ``spectrograms`` but will *not* be transformed and returned
-        in ``features_df`` (see the ``returns`` documentation below).
+        scipy.signal.spectrogram.
     :returns: a tuple ``(features_df, spectrograms)``. ``spectrograms`` 
         is a pandas series containing >=1 spectrograms (see the
         ``time_delta_threshold`` parameter to understand how there can
@@ -209,7 +204,7 @@ def get_participant_spectrogram_features(
 
         if len(f) < (spectrogram_window_size // 2 + 1):
             print(
-                "Discarding the spectrogram features produced by a dataframe with ``nrows < spectrogram_window_size``. The spectrogram will be returned in ``spectrograms`` but not in ``features_df``."
+                "Discarding spectrogram features with too few frequency bands (most likely caused by a dataframe with ``nrows < spectrogram_window_size`` after splitting the input data according to ``time_delta_threshold``). The corresponding spectrogram will be returned in ``spectrograms`` but not in ``features_df``."
             )
             # if the dataframe used to produce the spectrogram has
             # [nrows < spectrogram_window_size], then the number of
