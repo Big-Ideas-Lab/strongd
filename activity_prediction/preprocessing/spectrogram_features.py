@@ -8,6 +8,8 @@ import os
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
+import helperfuns
+
 
 @click.command()
 @click.option(
@@ -32,19 +34,16 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
     Create and save spectrogram features using the cleaned HR (seconds)
     and steps (minutes) data.
     """
-    with open(cleaned_steps_path, "rb") as f:
-        steps_df = pickle.load(f)
 
-    with open(cleaned_hr_path, "rb") as f:
-        hr_df = pickle.load(f)
+    steps_df, hr_df = helperfuns.load_data(
+        steps_path=cleaned_steps_path,
+        hr_path=cleaned_hr_path,
+        validate_ids=True,
+        sort=True,
+        sample_num=None,
+    )
 
     id_set = set(steps_df.index.get_level_values(0).unique())
-    # check that the HR and steps data have the same set of participant IDs
-    assert id_set == set(hr_df.index.get_level_values(0).unique())
-
-    print("Sorting steps and HR data by participant ID and then timestamp.")
-    steps_df.sort_index(level=["Id", "ActivityMinute"], inplace=True)
-    hr_df.sort_index(level=["Id", "Time"], inplace=True)
 
     print("Creating steps and HR spectrogram features for each participant.")
     steps_features_dict = dict()
