@@ -30,7 +30,7 @@ HR_SAMPLES_PER_SEC = 1 / 5  # median sampling rate in Strong-D HR data
 )
 @click.option(
     "--overlap/--no-overlap",
-    help="Indicator for whether or not to overlap the observations in the windows used to calculate the spectrogram. This flag and --window_size_in_minutes are used to derive the ``noverlap`` parameter in scipy.signal.spectrogram.",
+    help="Flag for whether or not to overlap the observations in the windows used to calculate the spectrogram. This flag and --window_size_in_minutes are used to derive the ``noverlap`` parameter in scipy.signal.spectrogram.",
 )
 @click.option(
     "--save_dir",
@@ -150,19 +150,24 @@ def get_participant_spectrogram_features(
     sampling rate in the data, but this is not the case in the Strong-D
     Fitbit data: most but not all steps data are sampled at 1
     observation per minute, and most but not all HR data are sampled at
-    1 observation per 3 seconds. For large gaps in the sampling rate,
-    e.g. 1 day, this function calculates separate spectrograms for the
-    data before versus after the large gap (see the
-    ``time_delta_threshold`` parameter). To calculate spectrograms on
-    smaller inconsistencies in the sampling rate, e.g. 1 second versus 5
-    second delta between consecutive observations, this function
-    calculates one spectrogram that *assumes* a constant sampling rate. 
-
-    For Strong-D steps data, the assumed constant sampling rate is 1
-    sample per min (median time delta between consecutive steps
-    observations); for Strong-D HR data, the assumed constant sampling
-    rate is 1 sample per 5s (median time delta between consecutive HR
-    observations).
+    1 observation per 3 seconds. 
+    
+    For large gaps in the sampling rate, e.g. 1 day, this function
+    splits the input dataframe (``participant_df``) and calculates
+    separate spectrograms for the sub-dataframes before versus after the
+    large gap (see the ``time_delta_threshold`` parameter). If a
+    sub-dataframe doesn't have enough rows for one full window
+    (``len(df) < spectrogram_window_size``), it will be discarded and
+    the corresponding features and spectrograms will not be returned.
+    
+    To calculate spectrograms on smaller inconsistencies in the sampling
+    rate, e.g. 1 second versus 5 second delta between consecutive
+    observations, this function calculates one spectrogram that
+    *assumes* a constant sampling rate. For Strong-D data, the assumed
+    constant *steps* sampling rate is 1 sample per min (median time
+    delta between consecutive steps observations) and the assumed
+    constant *HR* sampling rate is 1 sample per 5s (median time delta
+    between consecutive HR observations).
 
     :param participant_df: pandas dataframe indexed on a datetime
         column. This contains data for a *single* participant and
@@ -224,8 +229,6 @@ def get_participant_spectrogram_features(
             i + 1
         )  # iloc[:-1] makes the endpoint noninclusive
 
-    participant_df["group"] = participant_df["group"].astype("category")
-
     # one-sided spectrogram
     get_spectrogram = lambda x: signal.spectrogram(
         x,
@@ -236,31 +239,22 @@ def get_participant_spectrogram_features(
     )
     # num freq bands = nperseg/2 + 1
 
-    # create a spectrogram for each group, where the time delta is under
-    # time_delta_threshold within each group
-    spectrograms = participant_df.groupby("group")[spectrogram_col].apply(
-        get_spectrogram
-    )
+    # keep only groups with enough rows for >=1 full window
+    filtered_df = participant_df.groupby("group").filter(lambda g: len(g) >= spectrogram_window_size) 
+
+    # create a spectrogram for each group (where the time delta is under
+    # time_delta_threshold within each group)
+    spectrograms = filtered_df.groupby("group")[spectrogram_col].apply(get_spectrogram)
 
     # reshape the spectrograms into dataframes (indexed by time), where
     # each frequency band is its own field/column
     features_list = []
-    for i in range(len(spectrograms)):
+    for i in spectrograms.index:
         # extract the frequency, time and spectrogram values
         (f, t, Sxx) = spectrograms.loc[i]
 
-        if len(f) < (spectrogram_window_size // 2 + 1):
-            print(
-                "Discarding spectrogram features with too few frequency bands (most likely caused by a dataframe with ``nrows < spectrogram_window_size`` after splitting the input data according to ``time_delta_threshold``). The corresponding spectrogram will be returned in ``spectrograms`` but not in ``features_df``."
-            )
-            # if the dataframe used to produce the spectrogram has
-            # [nrows < spectrogram_window_size], then the number of
-            # frequency bands would be less than
-            # [floor(spectrogram_window_size/2) + 1]
-            continue
-
         # retrieve the original timestamps
-        time = participant_df.groupby("group").get_group(i).index[0] + pd.to_timedelta(
+        time = filtered_df.groupby("group").get_group(i).index[0] + pd.to_timedelta(
             t, unit="s"
         )
 
@@ -271,8 +265,8 @@ def get_participant_spectrogram_features(
                 data=Sxx.T,
                 index=time,
                 columns=[
-                    "spectrogram_" + str(np.round(f[i], 5)) + "Hz"
-                    for i in range(len(f))
+                    "spectrogram_" + str(np.round(f[j], 5)) + "Hz"
+                    for j in range(len(f))
                 ],
             )
         )
