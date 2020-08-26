@@ -5,11 +5,21 @@ import random
 def load_data(steps_path, hr_path, validate_ids=True, sort=True, sample_num=None):
     """Load steps and HR data from pickle files
 
-    :param steps_path: path to the pickle file containing a pandas dataframe of steps data with "Id" as the first index and "ActivityMinute" as the second (datetime) index.
-    :param hr_path: path to the pickle file containing a pandas dataframe of HR data with "Id" as the first index and "Time" as the second (datetime) index.
-    :param validate_ids: boolean that indicates whether to check that the steps and HR dataframes have the same set of values in their "Id" index, defaults to True.
-    :param sort: boolean that indicates whether to sort the steps and HR dataframes by their first and second indices (in this order), defaults to True.
-    :param sample_num: number of participants to sample for returning a subset of the steps and HR dataframes. Set this to ``None`` to get the full steps and HR dataframes. Defaults to None.
+    :param steps_path: path to the pickle file containing a pandas
+        dataframe of steps data with "Id" as the first index and
+        "ActivityMinute" as the second (datetime) index.
+    :param hr_path: path to the pickle file containing a pandas
+        dataframe of HR data with "Id" as the first index and "Time" as
+        the second (datetime) index.
+    :param validate_ids: boolean that indicates whether to check that
+        the steps and HR dataframes have the same set of values in their
+        "Id" index, defaults to True.
+    :param sort: boolean that indicates whether to sort the steps and HR
+        dataframes by their first and second indices (in this order),
+        defaults to True.
+    :param sample_num: number of participants to sample for returning a
+        subset of the steps and HR dataframes. Set this to ``None`` to
+        get the full steps and HR dataframes. Defaults to None.
     :return: a tuple of two pandas dataframes: (steps_df, hr_df).
     """
 
@@ -41,11 +51,12 @@ def load_data(steps_path, hr_path, validate_ids=True, sort=True, sample_num=None
     return (steps_df, hr_df)
 
 def remove_zero_daily_steps(steps_df):
-    """Remove all step data on a day if the total number of steps is zero on that day
+    """Remove all step data on a day if the total number of steps is
+    zero on that day
 
-    Note that the input dataframe (``steps_df``) is changed inplace and will be changed in the caller function.
-
-    :steps_df: pandas dataframe with participant ID on the first index and datetime on the second index. The first index must be named "Id" and the second index must be named "ActivityMinute".
+    :steps_df: pandas dataframe with participant ID on the first index
+        and datetime on the second index. The first index must be named
+        "Id" and the second index must be named "ActivityMinute".
     """
     print("Removing all step data on a day if the total number of steps is zero on that day.")
 
