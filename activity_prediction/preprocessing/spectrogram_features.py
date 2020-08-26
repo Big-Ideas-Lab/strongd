@@ -10,29 +10,51 @@ import plotly.graph_objects as go
 
 import helperfuns
 
+STEPS_SAMPLES_PER_SEC = 1 / 60  # median sampling rate in Strong-D step data
+HR_SAMPLES_PER_SEC = 1 / 5  # median sampling rate in Strong-D HR data
+
 
 @click.command()
 @click.option(
     "--cleaned_steps_path",
-    help="Path to the pickle file containing the cleaned Fitabase/Fitbit steps data.",
+    help="Path to the pickle file containing the cleaned Fitabase/Fitbit steps data. These data are a pandas dataframe with 'Id' as the first index, 'ActivityMinute' as the second (datetime) index, and 'Steps' as the only column.",
 )
 @click.option(
     "--cleaned_hr_path",
-    help="Path to the pickle file containing the cleaned Fitabase/Fitbit heart rate data.",
+    help="Path to the pickle file containing the cleaned Fitabase/Fitbit heart rate data. These data are a pandas dataframe with 'Id' as the first index, 'Time' as the second (datetime) index, and 'Value' as the only column.",
 )
 @click.option(
-    "--window_size",
-    help="Number of consecutive samples used to calculate each Fourier transform within the spectrogram. This corresponds to the ``nperseg`` parameter in scipy.signal.spectrogram.",
+    "--window_size_in_minutes",
+    help="This determines the number of consecutive samples used to calculate each windowed/short-time Fourier transform within the spectrogram. Specifically, a single windowed Fourier transformation will use ``window_size_in_minutes * samples_per_minute`` samples/rows (e.g. 10min) from the input dataframe.",
     type=int,
+)
+@click.option(
+    "--overlap/--no-overlap",
+    help="Indicator for whether or not to overlap the observations in the windows used to calculate the spectrogram. This flag and --window_size_in_minutes are used to derive the ``noverlap`` parameter in scipy.signal.spectrogram.",
 )
 @click.option(
     "--save_dir",
     help="Path to the directory for saving the steps and heart rate spectrogram features (as two separate pickle files).",
 )
-def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
+def main(
+    cleaned_steps_path, cleaned_hr_path, window_size_in_minutes, overlap, save_dir
+):
     """
     Create and save spectrogram features using the cleaned HR (seconds)
     and steps (minutes) data.
+
+    The number of observations/samples to use for calculating the
+    spectrogram is derived as: ``window_rows = (window_size_in_minutes *
+    60) * SAMPLES_PER_SEC``, where the sampling rate is different for
+    steps vs HR. This corresponds to the `nperseg`` parameter in
+    scipy.signal.spectrogram.
+
+    If the --overlap option is used, this function will use the maximum
+    overlap between each windowed/short-time Fourier transform within
+    the spectrogram: ``overlapping_rows = window_rows - 1`` (see
+    paragraph above for ``window_rows``). Otherwise, for --no-overlap,
+    ``overlapping_rows = 0``. This corresponds to the ``noverlap``
+    parameter in scipy.signal.spectrogram.
     """
 
     steps_df, hr_df = helperfuns.load_data(
@@ -45,6 +67,22 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
 
     id_set = set(steps_df.index.get_level_values(0).unique())
 
+    # Remove all step data on a day if the total number of steps is zero
+    # on that day
+    steps_df = helperfuns.remove_zero_daily_steps(steps_df)
+
+    # derive the number of observations in the window
+    steps_window_rows = int(window_size_in_minutes * 60 * STEPS_SAMPLES_PER_SEC)
+    hr_window_rows = int(window_size_in_minutes * 60 * HR_SAMPLES_PER_SEC)
+
+    # derive the number of observations to overlap
+    steps_overlap = 0
+    hr_overlap = 0
+    if overlap:
+        # maximum overlap between consecutive windows:
+        steps_overlap = steps_window_rows - 1
+        hr_overlap = hr_window_rows - 1
+
     print("Creating steps and HR spectrogram features for each participant.")
     steps_features_dict = dict()
     hr_features_dict = dict()
@@ -53,8 +91,9 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
             participant_df=steps_df.loc[participant_id],
             time_delta_threshold=pd.Timedelta("1D"),
             spectrogram_col="Steps",
-            spectrogram_samples_per_sec=1 / 60,
-            spectrogram_window_size=window_size,
+            spectrogram_samples_per_sec=STEPS_SAMPLES_PER_SEC,
+            spectrogram_window_size=steps_window_rows,
+            spectrogram_overlap_size=steps_overlap,
         )
         steps_features_dict[participant_id] = steps_features_df
 
@@ -62,8 +101,9 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
             participant_df=hr_df.loc[participant_id],
             time_delta_threshold=pd.Timedelta("1D"),
             spectrogram_col="Value",
-            spectrogram_samples_per_sec=1 / 5,
-            spectrogram_window_size=window_size,
+            spectrogram_samples_per_sec=HR_SAMPLES_PER_SEC,
+            spectrogram_window_size=hr_window_rows,
+            spectrogram_overlap_size=hr_overlap,
         )
         hr_features_dict[participant_id] = hr_features_df
 
@@ -72,14 +112,16 @@ def main(cleaned_steps_path, cleaned_hr_path, window_size, save_dir):
     all_hr_features_df = pd.concat(hr_features_dict).rename_axis(["Id", "Time"])
 
     steps_save_path = os.path.join(
-        save_dir, f"steps_spectrogram_features_df_window={window_size}.pickle"
+        save_dir,
+        f"steps_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}.pickle",
     )
     with open(steps_save_path, "wb") as f:
         pickle.dump(all_steps_features_df, f)
     print(f"Saved steps spectrogram features to {steps_save_path}.")
 
     hr_save_path = os.path.join(
-        save_dir, f"hr_spectrogram_features_df_window={window_size}.pickle"
+        save_dir,
+        f"hr_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}.pickle",
     )
     with open(hr_save_path, "wb") as f:
         pickle.dump(all_hr_features_df, f)
@@ -94,6 +136,7 @@ def get_participant_spectrogram_features(
     spectrogram_col,
     spectrogram_samples_per_sec,
     spectrogram_window_size,
+    spectrogram_overlap_size,
 ):
     """Get spectrogram features for a single participant.
 
@@ -143,6 +186,10 @@ def get_participant_spectrogram_features(
         calculate each windowed Fourier transform within the
         spectrogram. This corresponds to the ``nperseg`` parameter in
         scipy.signal.spectrogram.
+    :spectrogram_overlap_size: number of samples to overlap/re-use 
+        between consecutive windowed Fourier transforms within the
+        spectrogram. This corresponds to the ``noverlap`` parameter in
+        scipy.signal.spectrogram.
     :returns: a tuple ``(features_df, spectrograms)``. ``spectrograms`` 
         is a pandas series containing >=1 spectrograms (see the
         ``time_delta_threshold`` parameter to understand how there can
@@ -184,7 +231,7 @@ def get_participant_spectrogram_features(
         x,
         fs=spectrogram_samples_per_sec,
         nperseg=spectrogram_window_size,
-        noverlap=None,
+        noverlap=spectrogram_overlap_size,
         mode="magnitude",
     )
     # num freq bands = nperseg/2 + 1
