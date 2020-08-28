@@ -5,6 +5,7 @@ from tqdm import tqdm
 import pickle
 import click
 import os
+from pathlib import Path
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
@@ -12,6 +13,86 @@ import helperfuns
 
 STEPS_SAMPLES_PER_SEC = 1 / 60  # median sampling rate in Strong-D step data
 HR_SAMPLES_PER_SEC = 1 / 5  # median sampling rate in Strong-D HR data
+ID_LIST = [
+    "32113-0004",
+    "32113-0005",
+    "32113-0007",
+    "32113-0009",
+    "32113-0011",
+    "32113-0013",
+    "32113-0014",
+    "32113-0016",
+    "32113-0017",
+    "32113-0018",
+    "32113-0020",
+    "32113-0022",
+    "32113-0025",
+    "32113-0026",
+    "32113-0028",
+    "32113-0030",
+    "32113-0031",
+    "32113-0032",
+    "32113-0033",
+    "32113-0034",
+    "32113-0036",
+    "32113-0038",
+    "32113-0040",
+    "32113-0041",
+    "32113-0042",
+    "32113-0044",
+    "32113-0045",
+    "32113-0046",
+    "32113-0047",
+    "32113-0048",
+    "32113-0051",
+    "32113-0059",
+    "32113-0060",
+    "32113-0061",
+    "32113-0063",
+    "32113-0064",
+    "32113-0065",
+    "32113-0066",
+    "32113-0067",
+    "32113-0068",
+    "32113-0070",
+    "32113-0072",
+    "32113-0073",
+    "32113-0076",
+    "32113-0078",
+    "32113-0079",
+    "32113-0080",
+    "32113-0081",
+    "32113-0082",
+    "32113-0083",
+    "32113-0085",
+    "32113-0086",
+    "32113-0089",
+    "32113-0090",
+    "32113-0093",
+    "32113-0095",
+    "32113-0097",
+    "32113-0098",
+    "32113-0099",
+    "32113-0100",
+    "32113-0106",
+    "32113-0107",
+    "32113-0108",
+    "32113-0111",
+    "32113-0112",
+    "32113-0113",
+    "32113-0114",
+    "32113-0116",
+    "32113-0118",
+    "32113-0119",
+    "32113-0120",
+    "32113-0121",
+    "32113-0123",
+    "32113-0124",
+    "32113-0135",
+    "32113-0139",
+    "32113-0142",
+    "32113-0145",
+]  # used for running slurm job arrays
 
 
 @click.command()
@@ -36,8 +117,18 @@ HR_SAMPLES_PER_SEC = 1 / 5  # median sampling rate in Strong-D HR data
     "--save_dir",
     help="Path to the directory for saving the steps and heart rate spectrogram features (as two separate pickle files).",
 )
+@click.option(
+    "--concurrent/--not-concurrent",
+    default=False,
+    help="This is specific to Slurm job arrays: By turning on --concurrent and including ``#SBATCH --array=0_{num_participant_ids}`` in your job script, you will be able to run this python script as separate, concurrent jobs for each participant (instead of one large job for all participants). This is especially useful when you use --overlap and need to limit the amount of RAM used for each individual job.",
+)
 def main(
-    cleaned_steps_path, cleaned_hr_path, window_size_in_minutes, overlap, save_dir
+    cleaned_steps_path,
+    cleaned_hr_path,
+    window_size_in_minutes,
+    overlap,
+    save_dir,
+    concurrent,
 ):
     """
     Create and save spectrogram features using the cleaned HR (seconds)
@@ -57,15 +148,26 @@ def main(
     parameter in scipy.signal.spectrogram.
     """
 
+    subset_ids = None
+    if concurrent:
+        # choose one participant using the slurm array ID
+        task_id = int(os.environ["SLURM_ARRAY_TASK_ID"])
+        subset_ids = ID_LIST[task_id : task_id + 1]  # list of one element
+
+        # make subdirectory under save_dir if it doesn't exist
+        concurrent_save_dir = os.path.join(save_dir, "participant_spectrograms")
+        Path(concurrent_save_dir).mkdir(exist_ok=True)
+
     steps_df, hr_df = helperfuns.load_data(
         steps_path=cleaned_steps_path,
         hr_path=cleaned_hr_path,
         validate_ids=True,
-        sort=True,
         sample_num=None,
+        subset_ids=subset_ids,
+        sort=True,
     )
 
-    id_set = set(steps_df.index.get_level_values(0).unique())
+    id_list = list(steps_df.index.get_level_values(0).unique())
 
     # Remove all step data on a day if the total number of steps is zero
     # on that day
@@ -86,7 +188,7 @@ def main(
     print("Creating steps and HR spectrogram features for each participant.")
     steps_features_dict = dict()
     hr_features_dict = dict()
-    for participant_id in tqdm(id_set):
+    for participant_id in tqdm(id_list):
         steps_features_df, _ = get_participant_spectrogram_features(
             participant_df=steps_df.loc[participant_id],
             time_delta_threshold=pd.Timedelta("1D"),
@@ -115,6 +217,11 @@ def main(
         save_dir,
         f"steps_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}.pickle",
     )
+    if concurrent:
+        steps_save_path = os.path.join(
+            concurrent_save_dir,
+            f"steps_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}_participant={subset_ids}.pickle",
+        )
     with open(steps_save_path, "wb") as f:
         pickle.dump(all_steps_features_df, f)
     print(f"Saved steps spectrogram features to {steps_save_path}.")
@@ -123,6 +230,11 @@ def main(
         save_dir,
         f"hr_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}.pickle",
     )
+    if concurrent:
+        hr_save_path = os.path.join(
+            concurrent_save_dir,
+            f"hr_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}_participant={subset_ids}.pickle",
+        )
     with open(hr_save_path, "wb") as f:
         pickle.dump(all_hr_features_df, f)
     print(f"Saved HR spectrogram features to {hr_save_path}.")
@@ -240,7 +352,9 @@ def get_participant_spectrogram_features(
     # num freq bands = nperseg/2 + 1
 
     # keep only groups with enough rows for >=1 full window
-    filtered_df = participant_df.groupby("group").filter(lambda g: len(g) >= spectrogram_window_size) 
+    filtered_df = participant_df.groupby("group").filter(
+        lambda g: len(g) >= spectrogram_window_size
+    )
 
     # create a spectrogram for each group (where the time delta is under
     # time_delta_threshold within each group)

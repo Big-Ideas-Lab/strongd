@@ -2,7 +2,7 @@ import pandas as pd
 import pickle
 import random
 
-def load_data(steps_path, hr_path, validate_ids=True, sort=True, sample_num=None):
+def load_data(steps_path, hr_path, validate_ids=True, sample_num=None, subset_ids=None, sort=True):
     """Load steps and HR data from pickle files
 
     :param steps_path: path to the pickle file containing a pandas
@@ -18,8 +18,13 @@ def load_data(steps_path, hr_path, validate_ids=True, sort=True, sample_num=None
         dataframes by their first and second indices (in this order),
         defaults to True.
     :param sample_num: number of participants to sample for returning a
-        subset of the steps and HR dataframes. Set this to ``None`` to
-        get the full steps and HR dataframes. Defaults to None.
+        subset of the steps and HR dataframes. Defaults to None, which
+        will not perform any subsetting.
+    :param subset_ids: list of participants IDs to choose for returning
+        a subset of the steps and HR dataframes. These IDs should exist
+        in the first "Id" index of these dataframes. Defaults to None,
+        which will not perform any subsetting. ``sample_num`` takes
+        precedence over this parameter.
     :return: a tuple of two pandas dataframes: (steps_df, hr_df).
     """
 
@@ -42,6 +47,10 @@ def load_data(steps_path, hr_path, validate_ids=True, sort=True, sample_num=None
         sample_ids = random.sample(id_set, sample_num)
         steps_df = steps_df.loc[sample_ids]
         hr_df = hr_df.loc[sample_ids]
+    elif subset_ids:
+        print(f"Subsetting the steps and HR data to the participants specified in ``subset_ids``.")
+        steps_df = steps_df.loc[subset_ids]
+        hr_df = hr_df.loc[subset_ids]
 
     if sort:
         print("Sorting steps and HR data by participant ID and then timestamp.")
