@@ -220,7 +220,7 @@ def main(
     if concurrent:
         steps_save_path = os.path.join(
             concurrent_save_dir,
-            f"steps_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}_participant={subset_ids}.pickle",
+            f"steps_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}_participant={subset_ids[0]}.pickle",
         )
     with open(steps_save_path, "wb") as f:
         pickle.dump(all_steps_features_df, f)
@@ -233,7 +233,7 @@ def main(
     if concurrent:
         hr_save_path = os.path.join(
             concurrent_save_dir,
-            f"hr_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}_participant={subset_ids}.pickle",
+            f"hr_spectrogram_features_df_window={window_size_in_minutes}min_overlap={overlap}_participant={subset_ids[0]}.pickle",
         )
     with open(hr_save_path, "wb") as f:
         pickle.dump(all_hr_features_df, f)
