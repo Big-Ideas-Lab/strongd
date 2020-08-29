@@ -26,11 +26,12 @@ def main():
     )
 
     # set Id, Time as indices
-    labels.set_index(['Id', 'Time'], inplace=True)
+    labels.set_index(["Id", "Time"], inplace=True)
 
     # save
-    with open('clean_data/labels_df.pickle', 'wb') as f:
+    with open("clean_data/labels_df.pickle", "wb") as f:
         pickle.dump(labels, f)
+
 
 if __name__ == "__main__":
     main()
