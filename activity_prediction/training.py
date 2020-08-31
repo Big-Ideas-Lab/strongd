@@ -107,34 +107,5 @@ def grouped_grid_search(X, y, param_grid, n_splits):
     return grid_search
 
 
-def split(X, y, test_participant_ratio=0.2):
-    """Participant-conscious train-test split
-
-    Used to generate the ``train_test_participants.json`` file.
-
-    :param X: [description]
-    :param y: [description]
-    :param test_participant_ratio: [description], defaults to 0.2
-    :returns: [description]
-    """
-
-    # sample test participants according to the ratio
-    participants = set(X.index.get_level_values(0).unique())
-    num_participants = len(participants)
-    test_num = int(num_participants * test_participant_ratio)
-
-    # separate train vs test participants
-    test_participants = set(random.sample(participants, test_num))
-    train_participants = participants - test_participants
-
-    # separate X and y into their train vs test parts
-    X_train = X.loc[train_participants]
-    y_train = y.loc[train_participants]
-    X_test = X.loc[test_participants]
-    y_test = y.loc[test_participants]
-
-    return X_train, y_train, X_test, y_test
-
-
 if __name__ == "__main__":
     main()
