@@ -11,8 +11,10 @@ import plotly.graph_objects as go
 
 import helperfuns
 
-STEPS_SAMPLES_PER_SEC = 1 / 60  # median sampling rate in Strong-D step data
-HR_SAMPLES_PER_SEC = 1 / 5  # median sampling rate in Strong-D HR data
+# majority (99.9996%) sampling rate in Strong-D step data
+STEPS_SAMPLES_PER_SEC = 1 / 60
+# mean sampling rate in Strong-D HR data
+HR_SAMPLES_PER_SEC = 1 / 9
 ID_LIST = [
     "32113-0004",
     "32113-0005",
@@ -276,10 +278,10 @@ def get_participant_spectrogram_features(
     rate, e.g. 1 second versus 5 second delta between consecutive
     observations, this function calculates one spectrogram that
     *assumes* a constant sampling rate. For Strong-D data, the assumed
-    constant *steps* sampling rate is 1 sample per min (median time
+    constant *steps* sampling rate is 1 sample per minute (majority time
     delta between consecutive steps observations) and the assumed
-    constant *HR* sampling rate is 1 sample per 5s (median time delta
-    between consecutive HR observations).
+    constant *HR* sampling rate is 1 sample per 9 seconds (mean time
+    delta between consecutive HR observations).
 
     :param participant_df: pandas dataframe indexed on a datetime
         column. This contains data for a *single* participant and
