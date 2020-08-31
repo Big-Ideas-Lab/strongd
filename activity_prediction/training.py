@@ -42,6 +42,15 @@ def main(merged_features_path, save_path):
     # re-index and separate features X vs labels y
     X.drop(["Steps", "Value"], axis=1, inplace=True, errors="ignore")
     X.set_index(["Id", "Time"], inplace=True)
+
+    start_nrows = X.shape[0]
+    print(f"The input has {start_nrows} rows.")
+    X.dropna(inplace=True)
+
+    end_nrows = X.shape[0]
+    if end_nrows < start_nrows:
+        print(f"Dropped {start_nrows - end_nrows} rows with NAs.")
+
     y = X["Arm"]
     X.drop("Arm", axis=1, inplace=True)
 
