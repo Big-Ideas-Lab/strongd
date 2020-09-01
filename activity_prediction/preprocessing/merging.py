@@ -28,17 +28,24 @@ def main(window_size, feature_paths, save_path):
     SAVE_PATH: Path for saving the merged features as a pickle file.
     """
 
-    # get the first feature dataframe
-    merged = pickle.load(open(feature_paths[0], "rb"))
-    merged.index.rename(["Id", "Time"], inplace=True)
-
-    start_nrows = merged.shape[0]
-    print(f"The first feature file contains {start_nrows} rows.")
-
+    merged = None
     # merge all features
-    for path in feature_paths[1:]:
+    for path in feature_paths:
         to_merge = pickle.load(open(path, "rb"))
         to_merge.index.rename(["Id", "Time"], inplace=True)
+
+        # check if dataframe contains spectrogram features
+        if any(["spectrogram" in x for x in to_merge.columns]):
+            # keep only the frequency bands/columns with the most
+            # contribution to the signal
+            to_merge = get_top_frequency_bands(to_merge, n=5)
+
+        if merged is None:  # first dataframe
+            merged = to_merge
+            start_nrows = merged.shape[0]
+            print(f"The first feature file contains {start_nrows} rows.")
+            continue
+
         merged = merge_features(merged, to_merge, tolerance=window_size)
         merged.set_index(["Id", "Time"], inplace=True)
 
@@ -117,12 +124,11 @@ def merge_labels(
     return merged
 
 
-# TODO: maybe remove
-def get_top_frequency_bands(spectrogram_features, n=10):
+def get_top_frequency_bands(spectrogram_features, n=5):
     """Keep only the top n spectrogram frequency bands/columns 10 with the largest average magnitudes/contributions
 
     :param spectrogram_features: [description]
-    :param n: [description], defaults to 10
+    :param n: [description], defaults to 5
     :returns: [description]
     """
     desc = spectrogram_features.describe()
