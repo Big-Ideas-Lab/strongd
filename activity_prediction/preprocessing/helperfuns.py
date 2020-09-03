@@ -2,7 +2,21 @@ import pandas as pd
 import pickle
 import random
 
-def load_data(steps_path, hr_path, validate_ids=True, sample_num=None, subset_ids=None, sort=True):
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import plotly.graph_objects as go
+import plotly.express as px
+import seaborn as sns
+
+sns.set_palette("colorblind")
+plt.rcParams["font.family"] = "Times New Roman"
+plt.rcParams["font.size"] = 14
+plt.rcParams["axes.xmargin"] = 0
+
+
+def load_data(
+    steps_path, hr_path, validate_ids=True, sample_num=None, subset_ids=None, sort=True
+):
     """Load steps and HR data from pickle files
 
     :param steps_path: path to the pickle file containing a pandas
@@ -25,7 +39,7 @@ def load_data(steps_path, hr_path, validate_ids=True, sample_num=None, subset_id
         in the first "Id" index of these dataframes. Defaults to None,
         which will not perform any subsetting. ``sample_num`` takes
         precedence over this parameter.
-    :return: a tuple of two pandas dataframes: (steps_df, hr_df).
+    :returns: a tuple of two pandas dataframes: (steps_df, hr_df).
     """
 
     with open(steps_path, "rb") as f:
@@ -48,7 +62,9 @@ def load_data(steps_path, hr_path, validate_ids=True, sample_num=None, subset_id
         steps_df = steps_df.loc[sample_ids]
         hr_df = hr_df.loc[sample_ids]
     elif subset_ids:
-        print(f"Subsetting the steps and HR data to the participants specified in ``subset_ids``.")
+        print(
+            f"Subsetting the steps and HR data to the participants specified in ``subset_ids``."
+        )
         steps_df = steps_df.loc[subset_ids]
         hr_df = hr_df.loc[subset_ids]
 
@@ -59,33 +75,161 @@ def load_data(steps_path, hr_path, validate_ids=True, sample_num=None, subset_id
 
     return (steps_df, hr_df)
 
+
 def remove_zero_daily_steps(steps_df):
     """Remove all step data on a day if the total number of steps is
     zero on that day
 
-    :steps_df: pandas dataframe with participant ID on the first index
-        and datetime on the second index. The first index must be named
-        "Id" and the second index must be named "ActivityMinute".
+    :steps_df: pandas dataframe containing a "Steps" (step count)
+        column. The first index must be "Id" (participant ID) and the
+        second index must be "ActivityMinute" (minute grain timestamps).
+    :returns: pandas dataframe with rows removed
     """
-    print("Removing all step data on a day if the total number of steps is zero on that day.")
+    print(
+        "Removing all step data on a day if the total number of steps is zero on that day."
+    )
 
     # get date from the datetime index
-    steps_df['date'] = steps_df.index.get_level_values(1).date
+    steps_df["date"] = steps_df.index.get_level_values(1).date
 
     # re-index on participant ID and date (not datetime)
     steps_df.reset_index(inplace=True)
-    steps_df.set_index(['Id', 'date'], inplace=True)
+    steps_df.set_index(["Id", "date"], inplace=True)
 
     # create an indexing mask to retain only days when the daily total number of steps is above zero
-    daily_steps = steps_df.groupby(['Id', 'date']).Steps.sum()
+    daily_steps = steps_df.groupby(["Id", "date"]).Steps.sum()
     mask = daily_steps[daily_steps > 0].index
     steps_df = steps_df.loc[mask]
 
     # re-index back to the original index (Id, ActivityMinute)
     steps_df.reset_index(inplace=True)
-    steps_df.set_index(['Id', 'ActivityMinute'], inplace=True)
+    steps_df.set_index(["Id", "ActivityMinute"], inplace=True)
 
     # drop the date column
-    steps_df.drop('date', axis=1, inplace=True)
+    steps_df.drop("date", axis=1, inplace=True)
 
     return steps_df
+
+
+# PLOTTING
+def plot_spectrogram(spectrogram, interactive=True):
+
+    (f, t, Sxx) = spectrogram
+
+    x_label = "Time (seconds elapsed)"
+    y_label = "Frequency Band (Hz)"
+    if interactive:
+        fig = go.Figure(
+            data=go.Heatmap(z=Sxx, x=t, y=f),
+            layout=go.Layout(xaxis=dict(title=x_label), yaxis=dict(title=y_label)),
+        )
+        fig.show()
+    else:
+        sns.set_palette("colorblind")
+        plt.pcolormesh(t, f, Sxx)
+        plt.ylabel(y_label)
+        plt.xlabel(x_label)
+        plt.show()
+
+
+def plot_participant(
+    df,
+    participant_id,
+    y_name,
+    labels_df=None,
+    label_offset=pd.Timedelta("10min"),
+    label_duration=pd.Timedelta("1H"),
+    interactive=False,
+    x_name="Timestamp",
+    start_time=None,
+    end_time=None,
+    plot_other=False,
+    save_path=None,
+):
+
+    participant_df = df.loc[participant_id]
+    participant_labels = labels_df.loc[participant_id]
+    title = f"Participant {participant_id}"
+
+    if start_time and end_time:
+        participant_df = participant_df.loc[start_time:end_time]
+        participant_labels = participant_labels.loc[start_time:end_time]
+
+    if not interactive:
+        pd.options.plotting.backend = "matplotlib"
+
+        ax = participant_df.plot()
+        ax.set(ylabel=y_name, xlabel=x_name)
+        ax.set_title(title)
+
+        if not (labels_df is None):
+            for index, row in participant_labels.iterrows():
+                ax.axvspan(
+                    index + label_offset,
+                    index + label_offset + label_duration,
+                    color="tab:red",
+                    alpha=0.3,
+                )
+
+                if plot_other:
+                    ax.axvspan(
+                        index - label_duration, index, color="tab:blue", alpha=0.3,
+                    )
+
+        if start_time and end_time:
+            ax.xaxis.set_major_locator(mdates.HourLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:00"))
+            plt.setp(ax.get_xticklabels(), rotation=0, ha="center")
+
+        ax.get_legend().remove()
+
+        if save_path:
+            plt.savefig(save_path, dpi=1200, transparent=True)
+
+        plt.show()
+    else:
+        prev_plotting_backend = pd.options.plotting.backend
+        pd.options.plotting.backend = "plotly"
+        fig = participant_df.plot()
+        shapes = []
+        if not (labels_df is None):
+            for index, row in participant_labels.iterrows():
+                shape = dict(
+                    type="rect",
+                    # x-reference is assigned to the x-values
+                    xref="x",
+                    # y-reference is assigned to the plot paper [0,1]
+                    yref="paper",
+                    x0=index + label_offset,
+                    y0=0,
+                    x1=index + label_offset + label_duration,
+                    y1=1,
+                    fillcolor="red",
+                    opacity=0.3,
+                    layer="below",
+                    line_width=0,
+                )
+                if plot_other:
+                    shape = dict(
+                        type="rect",
+                        # x-reference is assigned to the x-values
+                        xref="x",
+                        # y-reference is assigned to the plot paper [0,1]
+                        yref="paper",
+                        x0=index - label_duration,
+                        y0=0,
+                        x1=index,
+                        y1=1,
+                        fillcolor="blue",
+                        opacity=0.3,
+                        layer="below",
+                        line_width=0,
+                    )
+
+                shapes.append(shape)
+            fig.update_layout(
+                shapes=shapes, title=title, xaxis_title=x_name, yaxis_title=y_name
+            )
+
+        fig.show()
+        pd.options.plotting.backend = prev_plotting_backend

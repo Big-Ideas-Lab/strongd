@@ -6,8 +6,6 @@ import pickle
 import click
 import os
 from pathlib import Path
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
 
 import helperfuns
 
@@ -390,24 +388,6 @@ def get_participant_spectrogram_features(
     features_df = pd.concat(features_list)
 
     return (features_df, spectrograms)
-
-
-def plot_spectrogram(spectrogram, interactive=True):
-    (f, t, Sxx) = spectrogram
-
-    x_label = "Time (seconds elapsed)"
-    y_label = "Frequency Bands (Hz)"
-    if interactive:
-        fig = go.Figure(
-            data=go.Heatmap(z=Sxx, x=t, y=f),
-            layout=go.Layout(xaxis=dict(title=x_label), yaxis=dict(title=y_label)),
-        )
-        fig.show()
-    else:
-        plt.pcolormesh(t, f, Sxx)
-        plt.ylabel(y_label)
-        plt.xlabel(x_label)
-        plt.show()
 
 
 if __name__ == "__main__":
