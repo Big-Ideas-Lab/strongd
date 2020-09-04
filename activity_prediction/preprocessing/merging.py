@@ -44,6 +44,15 @@ def main(window_size, feature_paths, save_path):
             merged = to_merge
             start_nrows = merged.shape[0]
             print(f"The first feature file contains {start_nrows} rows.")
+
+            # merge labels
+            merged = merge_labels(
+                merged, duration=pd.Timedelta("1H"), offset=pd.Timedelta("10min")
+            )
+            end_nrows = merged.shape[0]
+            print(
+                f"After merging (time-based left joins) with labels, the resulting dataframe contains {end_nrows} ({np.round(end_nrows/start_nrows*100, 2)}% of the starting number of rows)."
+            )
             continue
 
         merged = merge_features(merged, to_merge, tolerance=window_size)
@@ -52,16 +61,6 @@ def main(window_size, feature_paths, save_path):
     end_nrows = merged.shape[0]
     print(
         f"After merging (time-based left joins) the features, the resulting dataframe contains {end_nrows} ({np.round(end_nrows/start_nrows*100, 2)}% of the starting number of rows)."
-    )
-
-    # merge labels
-    merged = merge_labels(
-        merged, duration=pd.Timedelta("1H"), offset=pd.Timedelta("10min")
-    )
-
-    end_nrows = merged.shape[0]
-    print(
-        f"After merging (time-based left joins) with labels, the resulting dataframe contains {end_nrows} ({np.round(end_nrows/start_nrows*100, 2)}% of the starting number of rows)."
     )
 
     with open(save_path, "wb") as f:
