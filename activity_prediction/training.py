@@ -34,7 +34,9 @@ def main(merged_features_path, save_path, binary):
     """Train and select the best random forest on the feature set in the
     input file
 
-    :param merged_features_path: [description]
+    :param merged_features_path: path to pickle file containing a pandas
+        dataframe with features and labels. This dataframe must have
+        indices ("Id", "Time").    
     :param save_path: [description]
     """
     with open(merged_features_path, "rb") as f:
@@ -49,7 +51,6 @@ def main(merged_features_path, save_path, binary):
 
     # re-index and separate features X vs labels y
     X.drop(["Steps", "Value"], axis=1, inplace=True, errors="ignore")
-    X.set_index(["Id", "Time"], inplace=True)
 
     start_nrows = X.shape[0]
     print(f"The input (binary={binary}) has {start_nrows} rows.")
@@ -63,7 +64,9 @@ def main(merged_features_path, save_path, binary):
     X.drop("Arm", axis=1, inplace=True)
 
     # only use training participants that exist in the data
-    split_dict["train"] = list(set(split_dict["train"]) & set(X["Id"].unique()))
+    split_dict["train"] = list(set(split_dict["train"]) & set(X.index.get_level_values(0).unique()))
+
+    print(f"Training on the following {len(split_dict['train'])} participants: {split_dict['train']}")
 
     # get training data
     X_train = X.loc[split_dict["train"]]
