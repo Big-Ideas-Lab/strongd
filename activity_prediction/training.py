@@ -9,15 +9,14 @@ random.seed(0)
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import LeaveOneGroupOut
 
 # random forest parameter values to test in the grid search
 PARAM_GRID = {
-    "n_estimators": np.arange(200, 1001, 200),
-    "min_impurity_decrease": [0.001, 0.01, 0.1],
+    "max_features": ["sqrt", None, 0.2, 0.4, 0.8],
+    "min_samples_leaf": [1, 10, 100, 1000],
+    "max_samples": [None, 0.2, 0.4, 0.8],
 }
-# number of grouped cross-validation splits to use for the grid search
-NUM_SPLITS = 10
 
 
 @click.command()
@@ -64,29 +63,33 @@ def main(merged_features_path, save_path, binary):
     X.drop("Arm", axis=1, inplace=True)
 
     # only use training participants that exist in the data
-    split_dict["train"] = list(set(split_dict["train"]) & set(X.index.get_level_values(0).unique()))
+    split_dict["train"] = list(
+        set(split_dict["train"]) & set(X.index.get_level_values(0).unique())
+    )
 
-    print(f"Training on the following {len(split_dict['train'])} participants: {split_dict['train']}")
+    print(
+        f"Training on the following {len(split_dict['train'])} participants: {split_dict['train']}"
+    )
 
     # get training data
     X_train = X.loc[split_dict["train"]]
     y_train = y.loc[split_dict["train"]]
 
     # perform grid search
-    grid_search = grouped_grid_search(X_train, y_train, PARAM_GRID, NUM_SPLITS)
+    grid_search = grouped_grid_search(X_train, y_train, PARAM_GRID)
 
     with open(save_path, "wb") as f:
         pickle.dump(grid_search, f)
     print(f"Saved the grid search results to {save_path}.")
 
 
-def grouped_grid_search(X, y, param_grid, n_splits):
+def grouped_grid_search(X, y, param_grid):
     """Perform a grid search over random forest parameters using grouped
-    cross validation
+    leave one out cross-validation (LOOCV)
 
-    The grouped cross-validation (CV) ensures that within a single CV
-    split, one group's data (i.e. one participant's data) exist only
-    within the training fold or the validation fold but not both.
+    The *grouped* LOOCV ensures that within a single CV split, one
+    group's data (i.e. one participant's data) exist only within the
+    training fold or the validation fold but not both.
 
     The best combination of parameter values is determined by
     scikit-learn's "f1-macro" score. See
@@ -95,17 +98,19 @@ def grouped_grid_search(X, y, param_grid, n_splits):
     :param X: [description]
     :param y: [description]
     :param param_grid: [description]
-    :param n_splits: [description], defaults to 10
     :returns: [description]
     """
 
     # cross validation iterator for grouped data
     # in this case, each participant ID (in the first index) is a group
     groups = list(X.index.get_level_values(0))
-    group_kfold = GroupKFold(n_splits=n_splits)
+
+    # leave one person out cross validation
+    logo = LeaveOneGroupOut()
 
     # random forest and grid
     rf = RandomForestClassifier(
+        n_estimators=1000,
         criterion="gini",
         bootstrap=True,
         oob_score=True,
@@ -118,7 +123,7 @@ def grouped_grid_search(X, y, param_grid, n_splits):
         param_grid=param_grid,
         scoring="f1_macro",
         n_jobs=-1,
-        cv=group_kfold,
+        cv=logo,
         verbose=1,
     )
 
