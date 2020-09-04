@@ -209,6 +209,8 @@ def plot_participant(
                     layer="below",
                     line_width=0,
                 )
+                shapes.append(shape)
+                
                 if plot_other:
                     shape = dict(
                         type="rect",
@@ -225,8 +227,8 @@ def plot_participant(
                         layer="below",
                         line_width=0,
                     )
+                    shapes.append(shape)
 
-                shapes.append(shape)
             fig.update_layout(
                 shapes=shapes, title=title, xaxis_title=x_name, yaxis_title=y_name
             )
