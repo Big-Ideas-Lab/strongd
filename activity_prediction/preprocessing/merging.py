@@ -49,11 +49,19 @@ def main(window_size, feature_paths, save_path):
         merged = merge_features(merged, to_merge, tolerance=window_size)
         merged.set_index(["Id", "Time"], inplace=True)
 
-    # merge labels
-    merged = merge_labels(merged, tolerance=pd.Timedelta("1H"))
     end_nrows = merged.shape[0]
     print(
-        f"After merging (time-based left joins), the resulting feature dataframe contains {end_nrows} ({np.round(end_nrows/start_nrows*100, 2)}% of the starting number of rows)."
+        f"After merging (time-based left joins) the features, the resulting dataframe contains {end_nrows} ({np.round(end_nrows/start_nrows*100, 2)}% of the starting number of rows)."
+    )
+
+    # merge labels
+    merged = merge_labels(
+        merged, duration=pd.Timedelta("1H"), offset=pd.Timedelta("10min")
+    )
+
+    end_nrows = merged.shape[0]
+    print(
+        f"After merging (time-based left joins) with labels, the resulting dataframe contains {end_nrows} ({np.round(end_nrows/start_nrows*100, 2)}% of the starting number of rows)."
     )
 
     with open(save_path, "wb") as f:
@@ -89,37 +97,75 @@ def merge_features(df1, df2, tolerance, datetime_index="Time", id_index="Id"):
 
 def merge_labels(
     df,
-    tolerance=pd.Timedelta("1H"),
+    duration=pd.Timedelta("1H"),
+    offset=pd.Timedelta("10min"),
     datetime_index="Time",
     id_index="Id",
     labels_path="clean_data/labels_df.pickle",
 ):
-    """Merge labels onto the input dataframe using pandas.merge_asof
-
-    The default tolerance is 1 hour.
+    """Merge the input dataframe with labels (Strong-D study arms)
 
     :param df: [description]
-    :param tolerance: [description], defaults to pd.Timedelta("1H")
-    :param datetime_index: [description], defaults to "Time"
-    :param id_index: [description], defaults to "Id"
+    :param offset: [description], defaults to pd.Timedelta("10min")
+    :param duration: [description], defaults to pd.Timedelta("1H")
     :param labels_path: [description], defaults to "clean_data/labels_df.pickle"
     :returns: [description]
     """
-    with open(labels_path, "rb") as f:
-        labels = pickle.load(f)
 
-    # only match the nearest labels (gym sign-ins) to df
-    # records/measurements if the labels occur BEFORE the measurement
+    with open(labels_path, "rb") as f:
+        labels_df = pickle.load(f)
+
+    # drop any existing "Arm" label column
+    df.drop("Arm", axis=1, inplace=True, errors="ignore")
+
+    time = labels_df.index.get_level_values(1)
+
+    # create new labels where the datetime index is shifted by the offset
+    offset_df = labels_df.reset_index().drop(datetime_index, axis=1)
+    offset_df[datetime_index] = time.shift(freq=offset)
+    offset_df.set_index([id_index, datetime_index], inplace=True)
+
+    # create "other" (non- aerobic/strength/combined) labels
+    other_df = labels_df.reset_index().drop(datetime_index, axis=1)
+    other_df[datetime_index] = time.shift(freq=-duration)
+    other_df.set_index([id_index, datetime_index], inplace=True)
+    other_df["Arm"] = "other"
+
+    # only match the nearest labels (Strong-D study arms) to df
+    # records/measurements if the (shifted) labels occur BEFORE the
+    # measurement
     merged = pd.merge_asof(
         df.sort_index(level=datetime_index),
-        labels.sort_index(level=datetime_index),
+        offset_df.sort_index(level=datetime_index),
         on=datetime_index,
         by=id_index,
-        tolerance=tolerance,
+        tolerance=duration,
         direction="backward",
     )
+    merged.set_index([id_index, datetime_index], inplace=True)
 
-    merged["Arm"].fillna("other", inplace=True)
+    # only match the nearest "other" (not an aerobic/strength/combined
+    # study arm) labels to df records/measurements if the labels occur
+    # BEFORE the measurement
+    merged = pd.merge_asof(
+        merged.sort_index(level=datetime_index),
+        other_df.sort_index(level=datetime_index),
+        on=datetime_index,
+        by=id_index,
+        tolerance=duration,
+        direction="backward",
+    )
+    merged.set_index([id_index, datetime_index], inplace=True)
+
+    # combine the arm labels with the "other" labels
+    merged["Arm"] = merged["Arm_x"]
+    merged.loc[pd.notna(merged["Arm_y"]), "Arm"] = merged[pd.notna(merged["Arm_y"])][
+        "Arm_y"
+    ]
+    merged.drop(["Arm_x", "Arm_y"], axis=1, inplace=True)
+
+    # drop any rows without labels
+    merged.dropna(subset=["Arm"], inplace=True)
 
     return merged
 
