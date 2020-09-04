@@ -379,7 +379,7 @@ def get_participant_spectrogram_features(
                 data=Sxx.T,
                 index=time,
                 columns=[
-                    "spectrogram_" + str(np.round(f[j], 5)) + "Hz"
+                    f"{spectrogram_col}_spectrogram_" + str(np.round(f[j], 5)) + "Hz"
                     for j in range(len(f))
                 ],
             )
