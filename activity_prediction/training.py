@@ -28,8 +28,9 @@ NUM_SPLITS = 10
 @click.option(
     "--save_path", help="Path for saving the grid search results as a pickle file.",
 )
+@click.option("--binary/--not-binary")  # TODO
 # TODO: docs
-def main(merged_features_path, save_path):
+def main(merged_features_path, save_path, binary):
     """Train and select the best random forest on the feature set in the
     input file
 
@@ -39,12 +40,19 @@ def main(merged_features_path, save_path):
     with open(merged_features_path, "rb") as f:
         X = pickle.load(f)
 
+    # train-test split
+    with open("train_test_participants.json") as f:
+        split_dict = json.load(f)
+
+    if binary:  # only classify strength vs aerobic
+        X = X[X["Arm"].isin(["aerobic", "strength"])]
+
     # re-index and separate features X vs labels y
     X.drop(["Steps", "Value"], axis=1, inplace=True, errors="ignore")
     X.set_index(["Id", "Time"], inplace=True)
 
     start_nrows = X.shape[0]
-    print(f"The input has {start_nrows} rows.")
+    print(f"The input (binary={binary}) has {start_nrows} rows.")
     X.dropna(inplace=True)
 
     end_nrows = X.shape[0]
@@ -54,10 +62,10 @@ def main(merged_features_path, save_path):
     y = X["Arm"]
     X.drop("Arm", axis=1, inplace=True)
 
-    # train-test split
-    with open("train_test_participants.json") as f:
-        split_dict = json.load(f)
+    # only use training participants that exist in the data
+    split_dict["train"] = list(set(split_dict["train"]) & set(X["Id"].unique()))
 
+    # get training data
     X_train = X.loc[split_dict["train"]]
     y_train = y.loc[split_dict["train"]]
 
