@@ -9,14 +9,21 @@ hypothesis_1.nb.html
 */presentation/images/
 */presentation/*_report*
 temp_plots/
-*.RData
-*.png
 images/
 hypothesis_3/plots/
-*.pptx
 
+*.pptx
+*.ipynb
+*.RData
+*.png
 *.csv
 *.pickle
+*.Rproj
+
+archive/
+__pycache__/
+.vscode/
+.idea/
 
 # Created by https://www.toptal.com/developers/gitignore/api/jupyternotebooks
 # Edit at https://www.toptal.com/developers/gitignore?templates=jupyternotebooks
