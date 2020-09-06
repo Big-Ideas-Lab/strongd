@@ -6,14 +6,14 @@ import click
 
 @click.command()
 @click.option(
-    "--window_size",
-    help="Window size used for generating the features to be merged. This must use pandas's 'offset alias' syntax (see https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases), e.g. '10min'.",
+    "--tolerance",
+    help="This corresponds to the ``tolerance`` parameter in pandas.merge_asof and is used for merging features (not labels). This must use pandas's 'offset alias' syntax (see https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases), e.g. '10min'.",
 )
 @click.argument(
     "feature_paths", nargs=-1,
 )
 @click.argument("save_path", nargs=1)
-def main(window_size, feature_paths, save_path):
+def main(tolerance, feature_paths, save_path):
     """Merge features and labels onto the same timeline
 
     Uses pandas.merge_asof, which is a left join that matches on the
@@ -22,8 +22,6 @@ def main(window_size, feature_paths, save_path):
     FEATURE_PATHS: Space-separated paths to the pickle files containing
     the features (pandas dataframes) to merge. The merging will perform
     time-based left joins in the same order as the paths listed here.
-    Note that each of these feature files should have been generated
-    using the same window size specified in the --window_size option.
     
     SAVE_PATH: Path for saving the merged features as a pickle file.
     """
@@ -55,7 +53,7 @@ def main(window_size, feature_paths, save_path):
             )
             continue
 
-        merged = merge_features(merged, to_merge, tolerance=window_size)
+        merged = merge_features(merged, to_merge, tolerance=tolerance)
         merged.set_index(["Id", "Time"], inplace=True)
 
     end_nrows = merged.shape[0]
