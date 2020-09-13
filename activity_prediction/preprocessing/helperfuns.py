@@ -1,7 +1,9 @@
 import pandas as pd
+import numpy as np
 import pickle
 import random
 
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import plotly.graph_objects as go
@@ -12,6 +14,8 @@ sns.set_palette("colorblind")
 plt.rcParams["font.family"] = "Times New Roman"
 plt.rcParams["font.size"] = 14
 plt.rcParams["axes.xmargin"] = 0
+matplotlib.rcParams['axes.axisbelow'] = True
+plt.rcParams['svg.fonttype'] = 'none'
 
 
 def load_data(
@@ -112,12 +116,13 @@ def remove_zero_daily_steps(steps_df):
 
 
 # PLOTTING
-def plot_spectrogram(spectrogram, interactive=True):
+def plot_spectrogram(spectrogram, interactive=False, save_path=None):
 
     (f, t, Sxx) = spectrogram
 
-    x_label = "Time (seconds elapsed)"
+    x_label = "Time (Seconds Elapsed)"
     y_label = "Frequency Band (Hz)"
+
     if interactive:
         fig = go.Figure(
             data=go.Heatmap(z=Sxx, x=t, y=f),
@@ -125,11 +130,16 @@ def plot_spectrogram(spectrogram, interactive=True):
         )
         fig.show()
     else:
-        sns.set_palette("colorblind")
-        plt.pcolormesh(t, f, Sxx)
-        plt.ylabel(y_label)
-        plt.xlabel(x_label)
-        plt.show()
+        # reshape
+        spectrogram_df = pd.DataFrame(Sxx, index=np.round(f, 5), columns=t.astype(int))
+        spectrogram_df.sort_index(ascending=False, inplace=True)
+        ax = sns.heatmap(spectrogram_df, xticklabels = 300, cmap="Blues")
+        ax.set(ylabel=y_label, xlabel=x_label)
+
+        if save_path:
+            plt.savefig(save_path, dpi=600, transparent=True)
+
+        return ax
 
 
 def plot_participant(
@@ -140,7 +150,7 @@ def plot_participant(
     label_offset=pd.Timedelta("10min"),
     label_duration=pd.Timedelta("1H"),
     interactive=False,
-    x_name="Timestamp",
+    x_name="Time",
     start_time=None,
     end_time=None,
     plot_other=False,
@@ -149,7 +159,6 @@ def plot_participant(
 
     participant_df = df.loc[participant_id]
     participant_labels = labels_df.loc[participant_id]
-    title = f"Participant {participant_id}"
 
     if start_time and end_time:
         participant_df = participant_df.loc[start_time:end_time]
@@ -160,7 +169,6 @@ def plot_participant(
 
         ax = participant_df.plot()
         ax.set(ylabel=y_name, xlabel=x_name)
-        ax.set_title(title)
 
         if not (labels_df is None):
             for index, row in participant_labels.iterrows():
@@ -184,7 +192,7 @@ def plot_participant(
         ax.get_legend().remove()
 
         if save_path:
-            plt.savefig(save_path, dpi=1200, transparent=True)
+            plt.savefig(save_path, dpi=600, transparent=True)
 
         plt.show()
     else:
@@ -230,7 +238,7 @@ def plot_participant(
                     shapes.append(shape)
 
             fig.update_layout(
-                shapes=shapes, title=title, xaxis_title=x_name, yaxis_title=y_name
+                shapes=shapes, xaxis_title=x_name, yaxis_title=y_name
             )
 
         fig.show()
